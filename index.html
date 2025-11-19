@@ -87,7 +87,7 @@
                         <i class="fa-solid fa-sack-dollar text-4xl text-green-400"></i>
                     </div>
                     <p class="text-gray-400 text-sm font-medium">Net Cash (This Month)</p>
-                    <h3 class="text-3xl font-bold text-white mt-2" id="dash-net-cash">$0.00</h3>
+                    <h3 class="text-3xl font-bold text-white mt-2" id="dash-net-cash">₱0.00</h3>
                     <p class="text-xs text-gray-500 mt-2">Income Received - Expenses Paid</p>
                 </div>
 
@@ -96,7 +96,7 @@
                         <i class="fa-solid fa-arrow-trend-down text-4xl text-red-400"></i>
                     </div>
                     <p class="text-gray-400 text-sm font-medium">Total Expenses Paid</p>
-                    <h3 class="text-3xl font-bold text-white mt-2" id="dash-total-paid">$0.00</h3>
+                    <h3 class="text-3xl font-bold text-white mt-2" id="dash-total-paid">₱0.00</h3>
                     <p class="text-xs text-gray-500 mt-2">Includes Bills & Manual</p>
                 </div>
                 
@@ -110,14 +110,14 @@
                 </div>
             </div>
 
-            <!-- Manual Expenses Section -->
+            <!-- Transaction History (Manual + Bills) -->
             <div class="glass-panel rounded-2xl border border-gray-800 p-6">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-lg font-semibold flex items-center gap-2">
-                        <i class="fa-solid fa-receipt text-gray-400"></i> Unplanned / Manual Expenses
+                        <i class="fa-solid fa-list-check text-gray-400"></i> Monthly Payment History
                     </h2>
                     <button onclick="openExpenseModal()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors border border-gray-700 flex items-center gap-2">
-                        <i class="fa-solid fa-plus"></i> Add Expense
+                        <i class="fa-solid fa-plus"></i> Add Manual Expense
                     </button>
                 </div>
                 <div class="overflow-x-auto">
@@ -125,14 +125,15 @@
                         <thead class="bg-gray-900/50 uppercase text-xs font-semibold text-gray-500">
                             <tr>
                                 <th class="px-4 py-3 rounded-l-lg">Date</th>
+                                <th class="px-4 py-3">Type</th>
                                 <th class="px-4 py-3">Description</th>
                                 <th class="px-4 py-3 text-right">Amount</th>
                                 <th class="px-4 py-3 text-center rounded-r-lg">Actions</th>
                             </tr>
                         </thead>
-                        <tbody id="manual-expenses-list" class="divide-y divide-gray-800">
+                        <tbody id="dashboard-history-list" class="divide-y divide-gray-800">
                             <!-- Populated by JS -->
-                            <tr><td colspan="4" class="text-center py-4 text-gray-600">Loading expenses...</td></tr>
+                            <tr><td colspan="5" class="text-center py-4 text-gray-600">Loading transactions...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -144,7 +145,7 @@
             <div class="flex justify-between items-center">
                 <div class="space-y-1">
                     <h2 class="text-2xl font-bold">Recurring Bills</h2>
-                    <p class="text-gray-400 text-sm">Manage your fixed monthly or semi-monthly obligations.</p>
+                    <p class="text-gray-400 text-sm">Manage monthly, semi-monthly, or one-time obligations.</p>
                 </div>
                 <button onclick="openBillModal()" class="bg-brand-600 hover:bg-brand-500 text-white px-5 py-2.5 rounded-lg font-medium shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2">
                     <i class="fa-solid fa-plus"></i> Add Bill
@@ -236,7 +237,7 @@
 
     <!-- MODAL: Add/Edit Recurring Bill -->
     <div id="modal-bill" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
-        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
+        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md shadow-2xl overflow-y-auto max-h-[90vh]">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-xl font-bold text-white">Recurring Bill</h3>
                 <button id="btn-delete-bill" onclick="deleteBill()" class="text-red-400 text-xs hover:underline hidden">Delete</button>
@@ -253,17 +254,32 @@
                         <input type="number" id="bill-amount" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="0.00">
                     </div>
                     <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Day of Month Due</label>
-                        <input type="number" id="bill-day" min="1" max="31" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="1-31">
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Frequency</label>
+                        <select id="bill-freq" onchange="toggleBillFields()" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                            <option value="monthly">Monthly</option>
+                            <option value="semi-monthly">Semi-Monthly</option>
+                            <option value="one-time">One-Time</option>
+                        </select>
                     </div>
                 </div>
+                
+                <!-- Due Dates -->
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-xs font-medium text-gray-400 mb-1">Frequency</label>
-                        <select id="bill-freq" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
-                            <option value="monthly">Monthly</option>
-                            <!-- Semi-monthly logic handled by adding 2 bills or specific logic, keeping simple for now -->
-                        </select>
+                        <label class="block text-xs font-medium text-gray-400 mb-1" id="lbl-due-1">Day of Month Due</label>
+                        <input type="number" id="bill-day" min="1" max="31" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="1-31">
+                    </div>
+                    <div id="field-due-2" class="hidden">
+                        <label class="block text-xs font-medium text-gray-400 mb-1">2nd Due Day</label>
+                        <input type="number" id="bill-day-2" min="1" max="31" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="1-31">
+                    </div>
+                </div>
+
+                <!-- Dates -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Start Date (for counting)</label>
+                        <input type="date" id="bill-start-date" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
                     </div>
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">Termination (Optional)</label>
@@ -321,7 +337,7 @@
             <div class="mb-4">
                 <label class="block text-xs font-medium text-gray-400 mb-1">Actual Amount</label>
                 <div class="relative">
-                    <span class="absolute left-3 top-2.5 text-gray-500">$</span>
+                    <span class="absolute left-3 top-2.5 text-gray-500">₱</span>
                     <input type="number" id="trans-amount" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
                 </div>
             </div>
@@ -357,7 +373,6 @@
         const db = getFirestore(app);
         const analytics = getAnalytics(app);
         
-        // Use global variables provided by environment if available, otherwise default (Logic for Artifacts)
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'fintrack-prod';
         
         // --- State Management ---
@@ -366,7 +381,7 @@
             bills: [],
             ledger: [],
             manualExpenses: [],
-            settings: { income: 0, day1: 15, day2: 30 } // Defaults
+            settings: { income: 0, day1: 15, day2: 30 }
         };
         let unsubscribers = [];
 
@@ -377,18 +392,11 @@
         const appContainer = document.getElementById('app-container');
         const authSection = document.getElementById('auth-section');
 
-        // Init Auth Flow
         const initAuth = async () => {
-             // System Prompt Requirement: Try Custom Token First (for Preview Environment)
             if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                try {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } catch (e) {
-                    console.warn("Custom token failed, falling back to UI", e);
-                }
+                try { await signInWithCustomToken(auth, __initial_auth_token); } catch (e) { console.warn(e); }
             }
             
-            // Auth Listener
             onAuthStateChanged(auth, (user) => {
                 currentUser = user;
                 if (user) {
@@ -411,11 +419,7 @@
         document.getElementById('btn-google-login').addEventListener('click', () => {
             signInWithPopup(auth, provider).catch((error) => {
                 console.error("Login Failed:", error);
-                alert(`Login failed: ${error.message}. If you are in the preview environment, this is expected due to domain restrictions. Deployment to GitHub will work.`);
-                // Fallback for Preview ONLY if Google fails
-                if(window.location.hostname.includes("googleusercontent")) {
-                     signInAnonymously(auth);
-                }
+                if(window.location.hostname.includes("googleusercontent")) signInAnonymously(auth);
             });
         });
 
@@ -432,37 +436,34 @@
             document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
         }
 
-        // --- Data Listeners (Firestore) ---
+        // --- Data Listeners ---
         function initDataListeners(userId) {
             loadingScreen.classList.remove('hidden');
             
-            // Paths based on System Instructions
             const billsRef = collection(db, 'artifacts', appId, 'users', userId, 'bills');
             const ledgerRef = collection(db, 'artifacts', appId, 'users', userId, 'ledger');
             const settingsRef = collection(db, 'artifacts', appId, 'users', userId, 'settings');
 
-            // 1. Settings
             const unsubSettings = onSnapshot(settingsRef, (snapshot) => {
                 if(!snapshot.empty) {
                     const data = snapshot.docs[0].data();
                     state.settings = { ...state.settings, ...data, id: snapshot.docs[0].id };
                 }
                 refreshUI();
-            }, (err) => console.error(err));
+            });
 
-            // 2. Bills
             const unsubBills = onSnapshot(billsRef, (snapshot) => {
                 state.bills = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
                 refreshUI();
-            }, (err) => console.error(err));
+            });
 
-            // 3. Ledger (Transactions)
             const unsubLedger = onSnapshot(ledgerRef, (snapshot) => {
                 state.ledger = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                // manualExpenses derived for convenience, but dashboard now uses combined list
                 state.manualExpenses = state.ledger.filter(l => l.type === 'manual');
                 refreshUI();
                 loadingScreen.classList.add('hidden');
-            }, (err) => console.error(err));
+            });
 
             unsubscribers.push(unsubSettings, unsubBills, unsubLedger);
         }
@@ -472,7 +473,7 @@
             unsubscribers = [];
         }
 
-        // --- Core Logic & Rendering ---
+        // --- Core Logic ---
 
         function refreshUI() {
             renderDashboard();
@@ -480,57 +481,79 @@
             renderForecast();
         }
 
-        // 1. Dashboard Logic
+        // 1. Dashboard: Merged History
         window.renderDashboard = function() {
             const today = new Date();
-            const currentMonthStr = today.toISOString().slice(0, 7); // YYYY-MM
+            const currentMonthStr = today.toISOString().slice(0, 7); 
 
-            // Filter Ledger for current Month
             const monthTransactions = state.ledger.filter(t => t.date.startsWith(currentMonthStr));
             
             const incomeReceived = monthTransactions
                 .filter(t => t.type === 'income')
                 .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
+            // Expenses = Manual + Paid Bills
             const expensesPaid = monthTransactions
-                .filter(t => (t.type === 'manual' || (t.type === 'bill' && t.isPaid)))
+                .filter(t => t.type === 'manual' || t.type === 'bill')
                 .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
 
-            // Calculate Pending Bills
             const billsDue = state.bills.filter(b => {
-                // Check if paid in ledger
-                const isPaid = state.ledger.some(l => l.refId === b.id && l.date.startsWith(currentMonthStr) && l.isPaid);
-                return !isPaid; // Simple logic: if not in ledger as paid, it's pending
+                // Complex logic for pending: needs to account for semi-monthly
+                if(b.frequency === 'one-time') {
+                    if (!b.dueDayFull || !b.dueDayFull.startsWith(currentMonthStr)) return false; // Not this month
+                    return !state.ledger.some(l => l.refId === b.id && l.isPaid);
+                }
+                
+                // Check payment count for this month
+                const paymentsThisMonth = state.ledger.filter(l => l.refId === b.id && l.date.startsWith(currentMonthStr) && l.isPaid).length;
+                const required = b.frequency === 'semi-monthly' ? 2 : 1;
+                
+                return paymentsThisMonth < required;
             }).length;
 
-            // Update Summary Cards
             document.getElementById('dash-net-cash').innerText = formatCurrency(incomeReceived - expensesPaid);
             document.getElementById('dash-total-paid').innerText = formatCurrency(expensesPaid);
             document.getElementById('dash-pending-bills').innerText = billsDue;
 
-            // Render Manual Expenses List
-            const listEl = document.getElementById('manual-expenses-list');
-            const manualList = state.manualExpenses.sort((a,b) => new Date(b.date) - new Date(a.date));
+            // Render Merged List
+            const listEl = document.getElementById('dashboard-history-list');
+            // Sort by date desc
+            const historyList = monthTransactions
+                .filter(t => t.type === 'manual' || t.type === 'bill')
+                .sort((a,b) => new Date(b.date) - new Date(a.date));
             
-            if(manualList.length === 0) {
-                listEl.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-600">No manual expenses recorded.</td></tr>`;
+            if(historyList.length === 0) {
+                listEl.innerHTML = `<tr><td colspan="5" class="text-center py-8 text-gray-600">No payments made this month.</td></tr>`;
             } else {
-                listEl.innerHTML = manualList.map(ex => `
+                listEl.innerHTML = historyList.map(tx => {
+                    const isBill = tx.type === 'bill';
+                    return `
                     <tr class="hover:bg-gray-900/50 transition-colors group">
-                        <td class="px-4 py-3 font-mono text-xs text-gray-500">${ex.date}</td>
-                        <td class="px-4 py-3 text-white">${ex.description}</td>
-                        <td class="px-4 py-3 text-right font-medium text-red-400">-${formatCurrency(ex.amount)}</td>
+                        <td class="px-4 py-3 font-mono text-xs text-gray-500">${tx.date}</td>
+                        <td class="px-4 py-3">
+                            <span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded ${isBill ? 'bg-indigo-900/30 text-indigo-400' : 'bg-orange-900/30 text-orange-400'}">
+                                ${isBill ? 'Bill' : 'Manual'}
+                            </span>
+                        </td>
+                        <td class="px-4 py-3 text-white text-sm">${tx.description || (isBill ? 'Recurring Bill' : 'Expense')}</td>
+                        <td class="px-4 py-3 text-right font-medium text-red-400">-${formatCurrency(tx.amount)}</td>
                         <td class="px-4 py-3 text-center">
-                            <button onclick="deleteTransaction('${ex.id}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
+                            <div class="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+                                ${!isBill ? `
+                                <button onclick="editTransaction('${tx.id}')" class="text-gray-500 hover:text-brand-400">
+                                    <i class="fa-solid fa-pen"></i>
+                                </button>` : ''}
+                                <button onclick="deleteTransaction('${tx.id}')" class="text-gray-500 hover:text-red-500">
+                                    <i class="fa-solid fa-trash"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
-                `).join('');
+                `}).join('');
             }
         }
 
-        // 2. Bills Logic (Updated to include Status and Pay Action)
+        // 2. Bills Logic (With X of Y and Semi-Monthly)
         window.renderBills = function() {
             const listEl = document.getElementById('bills-list');
             if (state.bills.length === 0) {
@@ -539,58 +562,121 @@
             }
 
             const today = new Date();
-            const currentMonthStr = today.toISOString().slice(0, 7); // YYYY-MM
+            const currentMonthStr = today.toISOString().slice(0, 7); 
 
             listEl.innerHTML = state.bills.map(bill => {
-                // Check status for THIS month
-                const ledgerEntry = state.ledger.find(l => l.refId === bill.id && l.date.startsWith(currentMonthStr));
-                const isPaid = !!ledgerEntry;
+                // Filter out one-time bills that are not for this month or past
+                if(bill.frequency === 'one-time') {
+                   if(bill.endDate && new Date(bill.endDate) < new Date(currentMonthStr + '-01')) return ''; // Past
+                }
+
+                // Payment Counter Logic (X of Y)
+                let counterStr = '';
+                if (bill.frequency !== 'one-time' && bill.startDate) {
+                    const start = new Date(bill.startDate);
+                    const now = new Date();
+                    
+                    // Calculate total months passed since start
+                    const monthsPassed = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
+                    
+                    // Base Current Term
+                    let currentTerm = monthsPassed + 1; 
+                    if (currentTerm < 1) currentTerm = 1; // Future start date
+
+                    // Multiplier for Semi-Monthly
+                    if (bill.frequency === 'semi-monthly') {
+                        // Roughly: 2 terms per month
+                        // Refine based on day of month vs due days? Keep simple for display: "Month X"
+                        currentTerm = (monthsPassed * 2) + 1; // Just showing cycle count might be confusing.
+                        // Let's show "Month X of Y" instead of specific payment count for clarity
+                         counterStr = `Month ${monthsPassed + 1}`;
+                         if(bill.endDate) {
+                             const end = new Date(bill.endDate);
+                             const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+                             counterStr += ` of ${totalMonths}`;
+                         }
+                    } else {
+                        counterStr = `Payment ${currentTerm}`;
+                        if(bill.endDate) {
+                             const end = new Date(bill.endDate);
+                             const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+                             counterStr += ` of ${totalMonths}`;
+                         }
+                    }
+                }
+
+                // Render Actions
+                let actionsHtml = '';
                 
-                // Construct due date string for this month
-                const dueDayStr = String(bill.dueDay).padStart(2, '0');
-                const dueDateStr = `${currentMonthStr}-${dueDayStr}`;
+                if (bill.frequency === 'semi-monthly') {
+                    // Two due dates
+                    const date1 = `${currentMonthStr}-${String(bill.dueDay).padStart(2,'0')}`;
+                    const date2 = `${currentMonthStr}-${String(bill.dueDay2).padStart(2,'0')}`;
+                    
+                    const paid1 = state.ledger.find(l => l.refId === bill.id && l.date === date1);
+                    const paid2 = state.ledger.find(l => l.refId === bill.id && l.date === date2);
+
+                    actionsHtml = `
+                        <div class="grid grid-cols-2 gap-2 mt-4">
+                            ${renderBillBtn(bill, date1, paid1, '1st')}
+                            ${renderBillBtn(bill, date2, paid2, '2nd')}
+                        </div>
+                    `;
+                } else if (bill.frequency === 'one-time') {
+                     // One time
+                     // Use the start date or custom field as the specific date? 
+                     // For simplicity reusing 'dueDay' as day of current month or checking if 'startDate' is actually the due date.
+                     // Assuming One-Time bills show up if they are "active".
+                     const date = `${currentMonthStr}-${String(bill.dueDay).padStart(2,'0')}`;
+                     const paid = state.ledger.find(l => l.refId === bill.id && l.isPaid); // Check global paid for one-time
+                     actionsHtml = `<div class="mt-4">${renderBillBtn(bill, date, paid, 'Pay')}</div>`;
+                } else {
+                    // Monthly
+                    const date = `${currentMonthStr}-${String(bill.dueDay).padStart(2,'0')}`;
+                    const paid = state.ledger.find(l => l.refId === bill.id && l.date === date);
+                    actionsHtml = `<div class="mt-4">${renderBillBtn(bill, date, paid, 'Pay')}</div>`;
+                }
 
                 return `
-                <div class="glass-panel p-5 rounded-xl border border-gray-800 flex flex-col justify-between group hover:border-gray-700 transition-colors relative overflow-hidden">
-                    ${isPaid ? '<div class="absolute top-0 right-0 bg-green-500/10 text-green-500 text-[10px] font-bold px-2 py-1 rounded-bl-lg border-l border-b border-green-500/20">PAID THIS MONTH</div>' : ''}
-                    
-                    <div class="flex justify-between items-start mb-4">
+                <div class="glass-panel p-5 rounded-xl border border-gray-800 flex flex-col relative group">
+                    <div class="flex justify-between items-start">
                         <div>
                             <h4 class="font-bold text-white text-lg">${bill.name}</h4>
-                            <div class="flex items-center gap-3 mt-2">
-                                <span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded uppercase font-medium tracking-wider">${bill.frequency}</span>
-                                <span class="text-xs text-gray-500"><i class="fa-regular fa-calendar mr-1"></i> Due day: ${bill.dueDay}</span>
+                            <div class="flex items-center gap-2 mt-1 text-xs text-gray-400">
+                                <span class="bg-gray-800 px-2 py-0.5 rounded uppercase">${bill.frequency}</span>
+                                ${counterStr ? `<span class="text-brand-400">${counterStr}</span>` : ''}
                             </div>
-                            ${bill.endDate ? `<p class="text-xs text-orange-400 mt-2">Ends: ${bill.endDate}</p>` : ''}
+                            <div class="mt-2 text-xs text-gray-500">
+                                Due: ${bill.dueDay}${bill.dueDay2 ? ' & '+bill.dueDay2 : ''}
+                            </div>
                         </div>
                         <div class="text-right">
                             <p class="text-xl font-bold text-gray-200">${formatCurrency(bill.amount)}</p>
-                            <button onclick="editBill('${bill.id}')" class="mt-2 text-xs text-brand-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">Edit Details</button>
+                            <button onclick="editBill('${bill.id}')" class="mt-2 text-xs text-brand-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
                         </div>
                     </div>
-
-                    <!-- Payment Action Area -->
-                    <div class="mt-2 pt-3 border-t border-gray-800 flex items-center justify-between">
-                        <div class="text-xs text-gray-500">
-                            ${isPaid 
-                                ? `<span class="text-green-400"><i class="fa-solid fa-check-circle mr-1"></i> Paid on ${ledgerEntry.date}</span>` 
-                                : `<span class="text-yellow-500"><i class="fa-regular fa-clock mr-1"></i> Due this month</span>`
-                            }
-                        </div>
-                        <button 
-                            onclick="triggerTransaction('bill', '${bill.id}', '${dueDateStr}', ${bill.amount}, '${bill.name}', ${isPaid})"
-                            class="text-sm px-3 py-1.5 rounded-lg font-medium transition-all ${isPaid 
-                                ? 'bg-gray-800 text-gray-400 hover:bg-red-900/30 hover:text-red-400' 
-                                : 'bg-brand-600 text-white hover:bg-brand-500 shadow-lg shadow-brand-600/20'}"
-                        >
-                            ${isPaid ? 'Undo / Unmark' : 'Mark as Paid'}
-                        </button>
-                    </div>
+                    ${actionsHtml}
                 </div>
-            `}).join('');
+                `;
+            }).join('');
         }
 
-        // 3. Forecast Logic (The Complex Part)
+        function renderBillBtn(bill, dateStr, paidEntry, label) {
+            const isPaid = !!paidEntry;
+            return `
+                <button 
+                    onclick="triggerTransaction('bill', '${bill.id}', '${dateStr}', ${bill.amount}, '${bill.name} (${label})', ${isPaid})"
+                    class="w-full py-2 rounded-lg text-xs font-medium transition-all flex items-center justify-center gap-2
+                    ${isPaid 
+                        ? 'bg-green-900/20 text-green-400 border border-green-900/50' 
+                        : 'bg-gray-800 hover:bg-gray-700 text-white border border-gray-700'}"
+                >
+                    ${isPaid ? '<i class="fa-solid fa-check"></i> Paid' : `Mark ${label} Due`}
+                </button>
+            `;
+        }
+
+        // 3. Forecast Logic
         window.renderForecast = function() {
             const container = document.getElementById('forecast-container');
             container.innerHTML = '';
@@ -600,70 +686,62 @@
 
             months.forEach(monthObj => {
                 const monthStr = monthObj.iso; // YYYY-MM
-                const monthName = monthObj.label;
-
-                // Generate Forecast Items
                 let items = [];
 
-                // A. Income (2 Payouts)
+                // A. Income
                 [state.settings.day1, state.settings.day2].forEach((day, idx) => {
                     const idBase = `income_${monthStr}_${idx}`;
-                    // Check Ledger
                     const existing = state.ledger.find(l => l.refId === idBase && l.type === 'income');
-                    const isReceived = !!existing;
-                    const amt = isReceived ? existing.amount : payoutPerCycle;
-
                     items.push({
-                        id: idBase,
-                        type: 'income',
-                        title: `Payout #${idx + 1}`,
-                        amount: amt,
-                        day: day,
-                        date: `${monthStr}-${String(day).padStart(2,'0')}`,
-                        isCompleted: isReceived,
-                        status: isReceived ? 'Received' : 'Pending'
+                        id: idBase, type: 'income', title: `Payout #${idx + 1}`,
+                        amount: existing ? existing.amount : payoutPerCycle,
+                        day: day, date: `${monthStr}-${String(day).padStart(2,'0')}`,
+                        isCompleted: !!existing, status: existing ? 'Received' : 'Pending'
                     });
                 });
 
                 // B. Bills
                 state.bills.forEach(bill => {
-                    // Check termination
+                    // Check Termination
                     if (bill.endDate && new Date(bill.endDate) < new Date(`${monthStr}-01`)) return;
+                    // Check Start (Future bills)
+                    if (bill.startDate && new Date(bill.startDate) > new Date(`${monthStr}-28`)) return;
 
-                    const idBase = `bill_${bill.id}_${monthStr}`;
-                    // Check Ledger
-                    const existing = state.ledger.find(l => l.refId === bill.id && l.date.startsWith(monthStr) && l.isPaid);
-                    const isPaid = !!existing;
-                    const amt = isPaid ? existing.amount : bill.amount;
-
-                    items.push({
-                        id: idBase, // Virtual ID
-                        realId: bill.id, // Real Bill ID
-                        type: 'bill',
-                        title: bill.name,
-                        amount: amt,
-                        day: bill.dueDay,
-                        date: `${monthStr}-${String(bill.dueDay).padStart(2,'0')}`,
-                        isCompleted: isPaid,
-                        status: isPaid ? 'Paid' : 'Due'
-                    });
+                    if (bill.frequency === 'semi-monthly') {
+                        [bill.dueDay, bill.dueDay2].forEach(day => {
+                            if(!day) return;
+                            const dateStr = `${monthStr}-${String(day).padStart(2,'0')}`;
+                            const paid = state.ledger.find(l => l.refId === bill.id && l.date === dateStr);
+                            items.push(createForecastItem(bill, day, dateStr, paid));
+                        });
+                    } else if (bill.frequency === 'one-time') {
+                        // Only show if it matches this month exactly (assuming DueDay is day of current month logic, or handled by full date)
+                        // For One-Time, let's assume StartDate IS the due date
+                        if (bill.startDate && bill.startDate.startsWith(monthStr)) {
+                             const day = parseInt(bill.startDate.split('-')[2]);
+                             const paid = state.ledger.find(l => l.refId === bill.id && l.isPaid);
+                             items.push(createForecastItem(bill, day, bill.startDate, paid));
+                        }
+                    } else {
+                        // Monthly
+                        const dateStr = `${monthStr}-${String(bill.dueDay).padStart(2,'0')}`;
+                        const paid = state.ledger.find(l => l.refId === bill.id && l.date === dateStr);
+                        items.push(createForecastItem(bill, bill.dueDay, dateStr, paid));
+                    }
                 });
 
-                // Sort by day
                 items.sort((a, b) => a.day - b.day);
-
-                // Calculate projected balance impact for this month (Simple View)
+                
+                // Calc Totals
                 const totalIn = items.filter(i => i.type === 'income').reduce((s, i) => s + parseFloat(i.amount), 0);
                 const totalOut = items.filter(i => i.type === 'bill').reduce((s, i) => s + parseFloat(i.amount), 0);
-                const net = totalIn - totalOut;
 
-                // Render Card
-                const html = `
+                container.innerHTML += `
                     <div class="glass-panel rounded-2xl border border-gray-800 flex flex-col h-full">
                         <div class="p-5 border-b border-gray-800 bg-gray-900/30">
                             <div class="flex justify-between items-center mb-1">
-                                <h4 class="font-bold text-lg text-white">${monthName}</h4>
-                                <span class="text-xs font-mono ${net >= 0 ? 'text-green-400' : 'text-red-400'}">${net >= 0 ? '+' : ''}${formatCurrency(net)}</span>
+                                <h4 class="font-bold text-lg text-white">${monthObj.label}</h4>
+                                <span class="text-xs font-mono ${(totalIn-totalOut) >= 0 ? 'text-green-400' : 'text-red-400'}">${formatCurrency(totalIn - totalOut)}</span>
                             </div>
                             <div class="flex justify-between text-xs text-gray-500">
                                 <span>In: ${formatCurrency(totalIn)}</span>
@@ -675,9 +753,9 @@
                                 <div class="flex items-center justify-between p-3 rounded-lg ${item.isCompleted ? 'opacity-50 bg-gray-900' : 'bg-gray-800/50 hover:bg-gray-800'} transition-all cursor-pointer" onclick="triggerTransaction('${item.type}', '${item.realId || item.id}', '${item.date}', ${item.amount}, '${item.title}', ${item.isCompleted})">
                                     <div class="flex items-center gap-3">
                                         <div class="w-2 h-2 rounded-full ${item.type === 'income' ? 'bg-green-500' : 'bg-red-500'}"></div>
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-200">${item.title}</p>
-                                            <p class="text-[10px] text-gray-500">${item.date} • ${item.status}</p>
+                                        <div class="truncate max-w-[120px]">
+                                            <p class="text-sm font-medium text-gray-200 truncate">${item.title}</p>
+                                            <p class="text-[10px] text-gray-500">${item.date.slice(5)}</p>
                                         </div>
                                     </div>
                                     <div class="text-right">
@@ -690,105 +768,123 @@
                         </div>
                     </div>
                 `;
-                container.innerHTML += html;
             });
         }
 
-        // --- Transaction Handling (Mark as Paid/Received) ---
+        function createForecastItem(bill, day, dateStr, paidEntry) {
+            return {
+                id: `bill_${bill.id}_${dateStr}`,
+                realId: bill.id,
+                type: 'bill',
+                title: bill.name,
+                amount: paidEntry ? paidEntry.amount : bill.amount,
+                day: parseInt(day),
+                date: dateStr,
+                isCompleted: !!paidEntry,
+                status: paidEntry ? 'Paid' : 'Due'
+            };
+        }
+
+        // --- Transaction & Modals ---
+
         window.triggerTransaction = function(type, refId, date, currentAmount, title, isCompleted) {
             if (isCompleted) {
-                // Ideally allow editing completed, but for now let's toggle off or alert
-                if(confirm("This item is already marked as complete. Do you want to un-mark it?")) {
-                    // Find the ledger entry and delete it
-                    const entry = state.ledger.find(l => 
-                        (l.refId === refId && l.date === date) || 
-                        (type === 'bill' && l.refId === refId && l.date.startsWith(date.slice(0,7)))
-                    );
-                    if(entry) deleteTransaction(entry.id);
+                if(confirm("Un-mark this transaction? It will be removed from history.")) {
+                    const entry = state.ledger.find(l => l.refId === refId && l.date === date);
+                    if(entry) deleteTransaction(entry.id); // Use the ID of the transaction, not the bill
                 }
                 return;
             }
-
-            // Open Modal
             document.getElementById('trans-modal-title').innerText = type === 'income' ? 'Receive Income' : 'Pay Bill';
             document.getElementById('trans-modal-desc').innerText = `Confirming: ${title}`;
             document.getElementById('trans-type').value = type;
             document.getElementById('trans-ref-id').value = refId;
             document.getElementById('trans-date').value = date;
             document.getElementById('trans-amount').value = currentAmount;
-            
             openModal('modal-transaction');
         }
 
         window.confirmTransaction = async function() {
-            const type = document.getElementById('trans-type').value;
-            const refId = document.getElementById('trans-ref-id').value;
-            const date = document.getElementById('trans-date').value;
             const amount = parseFloat(document.getElementById('trans-amount').value);
-
-            if (!amount) return alert("Enter valid amount");
-
-            try {
-                const payload = {
-                    type: type, // 'income' or 'bill'
-                    amount: amount,
-                    date: date,
-                    isPaid: true, // for bills
-                    isReceived: true, // for income
-                    refId: refId, // Links back to bill ID or income slot ID
-                    createdAt: new Date().toISOString()
-                };
-
-                // Using addDoc since we might pay multiple times or want history
-                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), payload);
-                closeModal('modal-transaction');
-            } catch (e) {
-                console.error(e);
-                alert("Error saving transaction");
-            }
-        }
-
-        // --- CRUD Operations ---
-
-        // Manual Expense
-        window.openExpenseModal = () => openModal('modal-expense');
-        
-        window.saveExpense = async function() {
-            const desc = document.getElementById('expense-desc').value;
-            const amount = document.getElementById('expense-amount').value;
-            const date = document.getElementById('expense-date').value || new Date().toISOString().split('T')[0];
-
-            if (!desc || !amount) return alert("Please fill all fields");
-
+            if (!amount) return;
+            
             try {
                 await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
-                    type: 'manual',
-                    description: desc,
-                    amount: parseFloat(amount),
-                    date: date,
+                    type: document.getElementById('trans-type').value,
+                    amount: amount,
+                    date: document.getElementById('trans-date').value,
+                    isPaid: true,
+                    description: document.getElementById('trans-modal-desc').innerText.replace('Confirming: ', ''),
+                    refId: document.getElementById('trans-ref-id').value, // ID of bill or income slot
                     createdAt: new Date().toISOString()
                 });
+                closeModal('modal-transaction');
+            } catch (e) { alert("Error"); console.error(e); }
+        }
+
+        // Edit Unplanned
+        window.editTransaction = function(id) {
+            const tx = state.ledger.find(t => t.id === id);
+            if(!tx || tx.type !== 'manual') return;
+            
+            document.getElementById('expense-id').value = tx.id;
+            document.getElementById('expense-desc').value = tx.description;
+            document.getElementById('expense-amount').value = tx.amount;
+            document.getElementById('expense-date').value = tx.date;
+            openModal('modal-expense');
+        }
+
+        window.saveExpense = async function() {
+            const id = document.getElementById('expense-id').value;
+            const data = {
+                type: 'manual',
+                description: document.getElementById('expense-desc').value,
+                amount: parseFloat(document.getElementById('expense-amount').value),
+                date: document.getElementById('expense-date').value || new Date().toISOString().split('T')[0],
+                createdAt: new Date().toISOString()
+            };
+            
+            if (!data.description || !data.amount) return;
+
+            const ref = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger');
+            try {
+                if(id) {
+                    await setDoc(doc(ref, id), data, { merge: true });
+                } else {
+                    await addDoc(ref, data);
+                }
                 closeModal('modal-expense');
-                document.getElementById('expense-desc').value = '';
-                document.getElementById('expense-amount').value = '';
-            } catch (e) {
-                console.error(e);
-                alert("Error saving expense");
+            } catch (e) { console.error(e); }
+        }
+
+        // Bill Form
+        window.toggleBillFields = function() {
+            const freq = document.getElementById('bill-freq').value;
+            const due2 = document.getElementById('field-due-2');
+            const lbl1 = document.getElementById('lbl-due-1');
+            
+            if(freq === 'semi-monthly') {
+                due2.classList.remove('hidden');
+                lbl1.innerText = "1st Due Day";
+            } else if (freq === 'one-time') {
+                due2.classList.add('hidden');
+                lbl1.innerText = "Due Day (Day of month)"; // or change input to full date
+            } else {
+                due2.classList.add('hidden');
+                lbl1.innerText = "Day of Month Due";
             }
         }
 
-        window.deleteTransaction = async function(id) {
-            if(!confirm("Delete this record?")) return;
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger', id));
-        }
-
-        // Bills
         window.openBillModal = () => {
             document.getElementById('bill-id').value = '';
             document.getElementById('bill-name').value = '';
             document.getElementById('bill-amount').value = '';
+            document.getElementById('bill-freq').value = 'monthly';
             document.getElementById('bill-day').value = '';
+            document.getElementById('bill-day-2').value = '';
+            document.getElementById('bill-start-date').value = new Date().toISOString().split('T')[0];
             document.getElementById('bill-end-date').value = '';
+            toggleBillFields();
             document.getElementById('btn-delete-bill').classList.add('hidden');
             openModal('modal-bill');
         }
@@ -799,7 +895,11 @@
             document.getElementById('bill-id').value = bill.id;
             document.getElementById('bill-name').value = bill.name;
             document.getElementById('bill-amount').value = bill.amount;
+            document.getElementById('bill-freq').value = bill.frequency || 'monthly';
+            toggleBillFields();
             document.getElementById('bill-day').value = bill.dueDay;
+            document.getElementById('bill-day-2').value = bill.dueDay2 || '';
+            document.getElementById('bill-start-date').value = bill.startDate || '';
             document.getElementById('bill-end-date').value = bill.endDate || '';
             document.getElementById('btn-delete-bill').classList.remove('hidden');
             openModal('modal-bill');
@@ -810,66 +910,63 @@
             const data = {
                 name: document.getElementById('bill-name').value,
                 amount: parseFloat(document.getElementById('bill-amount').value),
+                frequency: document.getElementById('bill-freq').value,
                 dueDay: parseInt(document.getElementById('bill-day').value),
+                dueDay2: parseInt(document.getElementById('bill-day-2').value) || null,
+                startDate: document.getElementById('bill-start-date').value,
                 endDate: document.getElementById('bill-end-date').value,
-                frequency: document.getElementById('bill-freq').value
             };
 
-            if (!data.name || !data.amount || !data.dueDay) return alert("Fill required fields");
-
+            if (!data.name || !data.amount || !data.dueDay) return alert("Fill required");
+            
             const ref = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'bills');
             try {
-                if(id) {
-                    await setDoc(doc(ref, id), data, { merge: true });
-                } else {
-                    await addDoc(ref, data);
-                }
+                if(id) await setDoc(doc(ref, id), data, { merge: true });
+                else await addDoc(ref, data);
                 closeModal('modal-bill');
-            } catch (e) { console.error(e); alert("Error saving bill"); }
+            } catch (e) { console.error(e); }
         }
 
-        window.deleteBill = async function() {
-            const id = document.getElementById('bill-id').value;
-            if(!id || !confirm("Delete this recurring bill?")) return;
-            await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', id));
-            closeModal('modal-bill');
+        // Shared
+        window.deleteTransaction = async (id) => {
+            if(confirm("Remove this?")) await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger', id));
         }
-
-        // Settings
+        window.deleteBill = async () => {
+             if(confirm("Delete recurring bill?")) {
+                 const id = document.getElementById('bill-id').value;
+                 await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', id));
+                 closeModal('modal-bill');
+             }
+        }
+        window.openExpenseModal = () => {
+            document.getElementById('expense-id').value = '';
+            document.getElementById('expense-desc').value = '';
+            document.getElementById('expense-amount').value = '';
+            document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
+            openModal('modal-expense');
+        }
         window.openSettingsModal = () => {
             document.getElementById('setting-income').value = state.settings.income;
             document.getElementById('setting-day1').value = state.settings.day1;
             document.getElementById('setting-day2').value = state.settings.day2;
             openModal('modal-settings');
         }
-
-        window.saveSettings = async function() {
+        window.saveSettings = async () => {
             const data = {
                 income: parseFloat(document.getElementById('setting-income').value) || 0,
                 day1: parseInt(document.getElementById('setting-day1').value) || 15,
                 day2: parseInt(document.getElementById('setting-day2').value) || 30
             };
-
             const ref = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'settings');
-            try {
-                // Assume single settings doc or overwrite with fixed ID if preferred. using add/update logic
-                if(state.settings.id) {
-                    await setDoc(doc(ref, state.settings.id), data, { merge: true });
-                } else {
-                    await addDoc(ref, data);
-                }
-                closeModal('modal-settings');
-            } catch(e) { console.error(e); }
+            if(state.settings.id) await setDoc(doc(ref, state.settings.id), data, { merge: true });
+            else await addDoc(ref, data);
+            closeModal('modal-settings');
         }
 
-
-        // --- Utilities ---
-
-        window.switchTab = function(tabId) {
+        // Utils
+        window.switchTab = (tabId) => {
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
             document.getElementById(`view-${tabId}`).classList.remove('hidden');
-            
-            // Update Tab styles
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 btn.classList.remove('text-brand-500', 'bg-gray-800', 'shadow-sm');
                 btn.classList.add('text-gray-400');
@@ -877,31 +974,15 @@
             const activeBtn = document.getElementById(`tab-${tabId}`);
             activeBtn.classList.remove('text-gray-400');
             activeBtn.classList.add('text-brand-500', 'bg-gray-800', 'shadow-sm');
-            
             if(tabId === 'forecast') renderForecast();
         }
-
-        window.openModal = (id) => {
-            const el = document.getElementById(id);
-            el.classList.remove('hidden');
-            el.classList.add('flex');
-        }
-        window.closeModal = (id) => {
-            const el = document.getElementById(id);
-            el.classList.add('hidden');
-            el.classList.remove('flex');
-        }
-
-        function formatCurrency(amount) {
-            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-        }
-
+        window.openModal = (id) => { document.getElementById(id).classList.remove('hidden'); document.getElementById(id).classList.add('flex'); }
+        window.closeModal = (id) => { document.getElementById(id).classList.add('hidden'); document.getElementById(id).classList.remove('flex'); }
+        function formatCurrency(amount) { return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(amount); }
         function getNext3Months() {
             const result = [];
             const today = new Date();
-            // Adjust date to 1st to avoid end-of-month skipping issues
             let current = new Date(today.getFullYear(), today.getMonth(), 1);
-
             for(let i=0; i<3; i++) {
                 const iso = current.toISOString().slice(0, 7);
                 const label = current.toLocaleString('default', { month: 'long', year: 'numeric' });
@@ -911,9 +992,7 @@
             return result;
         }
 
-        // --- Init ---
         window.switchTab('dashboard');
-
     </script>
 </body>
 </html>
