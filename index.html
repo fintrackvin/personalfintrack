@@ -26,15 +26,28 @@
     }
   </script>
 
-  <!-- React & ReactDOM (UMD) -->
-  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  
-  <!-- Recharts (UMD) -->
-  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
-
-  <!-- Babel Standalone (for JSX/TSX) -->
+  <!-- Babel for JSX transformation -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Import Map: Defines where to load modules from -->
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.3.1,react-dom@18.3.1",
+    "recharts": "https://esm.sh/recharts@2.12.7?deps=react@18.3.1,react-dom@18.3.1",
+    "lucide-react": "https://esm.sh/lucide-react@0.344.0?deps=react@18.3.1",
+    "@google/genai": "https://esm.sh/@google/genai@0.1.1",
+    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js",
+    "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js",
+    "firebase/database": "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
+  }
+}
+</script>
 
   <style>
     /* Custom Scrollbar */
@@ -42,53 +55,80 @@
     ::-webkit-scrollbar-track { background: #0f172a; }
     ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
     ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    
+    /* Loading Animation */
+    .loader {
+      border: 4px solid #1e293b;
+      border-top: 4px solid #3b82f6;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
-<script type="importmap">
-{
-  "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.4.1"
-  }
-}
-</script>
 </head>
-<body class="bg-background text-white antialiased min-h-screen">
+<body class="bg-background text-white antialiased min-h-screen overflow-hidden">
+  
+  <!-- Loading State (Visible until React mounts) -->
+  <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-background z-50">
+    <div class="loader mb-4"></div>
+    <h2 class="text-xl font-bold text-blue-500">FinTrack AI</h2>
+    <p class="text-gray-500 text-sm mt-2">Loading modules...</p>
+  </div>
+
+  <!-- Error Display (Visible if crash) -->
+  <div id="error-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-red-900/20 z-[60] hidden p-8 text-center">
+    <h2 class="text-2xl font-bold text-red-500 mb-2">Application Error</h2>
+    <p class="text-gray-300 mb-4">Something went wrong while loading the application.</p>
+    <pre id="error-message" class="bg-black/50 p-4 rounded text-left text-red-300 text-xs overflow-auto max-w-full"></pre>
+    <button onclick="window.location.reload()" class="mt-6 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded">Reload Page</button>
+  </div>
+
   <div id="root"></div>
 
+  <!-- Global Error Handler -->
+  <script>
+    window.onerror = function(msg, url, line, col, error) {
+      document.getElementById('loading-screen').style.display = 'none';
+      document.getElementById('error-screen').style.display = 'flex';
+      document.getElementById('error-message').textContent = `Error: ${msg}\nLine: ${line}\nFile: ${url}`;
+      console.error(error);
+    };
+    // Catch unhandled promise rejections
+    window.onunhandledrejection = function(event) {
+      document.getElementById('loading-screen').style.display = 'none';
+      document.getElementById('error-screen').style.display = 'flex';
+      document.getElementById('error-message').textContent = `Promise Error: ${event.reason}`;
+    };
+  </script>
+
   <!-- Application Code -->
-  <script type="text/babel" data-type="module" data-presets="typescript,react">
+  <script type="text/babel" data-type="module">
     /***********************************************************
      * IMPORTS
      ***********************************************************/
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-    import { getDatabase, ref, set, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
-    import { GoogleGenAI } from "https://esm.sh/@google/genai"; 
-    import { HashRouter, Routes, Route, Link, Navigate, useLocation } from "https://esm.sh/react-router-dom?external=react";
+    import React, { useState, useEffect, useMemo, createContext, useContext } from 'react';
+    import { createRoot } from 'react-dom/client';
+    import { HashRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
     import { 
       LayoutDashboard, Receipt, CalendarClock, LogOut, PieChart as IconPieChart, 
       Plus, Trash2, Edit2, Sparkles, Wallet, CheckCircle, AlertCircle, Settings, Save, Check 
-    } from "https://esm.sh/lucide-react?external=react";
+    } from 'lucide-react';
+    import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+    import { initializeApp } from 'firebase/app';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+    import { getDatabase, ref, set, push, onValue, remove, update } from 'firebase/database';
+    import { GoogleGenAI } from '@google/genai';
 
-    // Access React globals
-    const { useState, useEffect, useMemo, createContext, useContext } = React;
-    // Access Recharts globals
-    const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } = window.Recharts;
-
+    // Hide loader once script starts executing (though React mount will be the real finish)
+    // We'll hide it inside the root render
+    
     /***********************************************************
      * CONFIGURATION & TYPES
      ***********************************************************/
     
-    // Shim process.env for API Key usage if you set it in your environment, 
-    // otherwise GenAI will use what's passed or fail gracefully.
-    // NOTE: In a real deployment, use secrets. For this demo, we assume the user might
-    // manually configure it or it's injected.
+    // Fake process.env for GenAI SDK if needed, though we usually pass apiKey in constructor
     window.process = { env: { API_KEY: '' } }; 
 
     // Firebase Config
@@ -109,7 +149,7 @@
     const db = getDatabase(app);
     const googleProvider = new GoogleAuthProvider();
 
-    // Types
+    // Types (Constants in JS)
     const TransactionType = {
       INCOME: 'income',
       EXPENSE: 'expense',
@@ -130,6 +170,7 @@
         await signInWithPopup(auth, googleProvider);
       } catch (error) {
         console.error("Error signing in", error);
+        alert("Failed to sign in: " + error.message);
       }
     };
 
@@ -142,12 +183,16 @@
     };
 
     const analyzeFinances = async (settings, bills, transactions) => {
-      // NOTE: You can insert your API Key here for the demo if process.env is not set
-      const API_KEY = process.env.API_KEY || ''; 
+      // Use prompt/localStorage for key in this static demo
+      let apiKey = localStorage.getItem('GEMINI_API_KEY');
+      if (!apiKey) {
+        apiKey = prompt("Please enter your Google Gemini API Key to use AI features:");
+        if (apiKey) localStorage.setItem('GEMINI_API_KEY', apiKey);
+      }
       
-      if (!API_KEY) return "API Key not configured in environment.";
+      if (!apiKey) return "API Key is required for AI advice.";
 
-      const ai = new GoogleGenAI({ apiKey: API_KEY });
+      const ai = new GoogleGenAI({ apiKey: apiKey });
 
       // Filter recent transactions (last 30 days)
       const now = new Date();
@@ -179,7 +224,11 @@
         return response.text || "Could not generate advice.";
       } catch (error) {
         console.error("Gemini Error:", error);
-        return "Sorry, I encountered an error analyzing your data. Please check your API Key.";
+        if (error.message.includes('403') || error.message.includes('key')) {
+           localStorage.removeItem('GEMINI_API_KEY'); // Reset invalid key
+           return "Invalid API Key. Please try again.";
+        }
+        return "Sorry, I encountered an error analyzing your data.";
       }
     };
 
@@ -269,6 +318,9 @@
             setBills([]);
             setTransactions([]);
           }
+          setLoadingData(false);
+        }, (error) => {
+          console.error("Firebase Error:", error);
           setLoadingData(false);
         });
 
@@ -385,8 +437,8 @@
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-background">
-            <div className="max-w-6xl mx-auto space-y-6">
+          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-background h-[calc(100vh-64px)] md:h-screen">
+            <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-0">
               {children}
             </div>
           </main>
@@ -491,7 +543,7 @@
       };
 
       return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-500">
           {/* Top Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
@@ -775,7 +827,7 @@
       const activeBills = bills.filter(b => !b.isArchived);
 
       return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-500">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
             <div>
               <h2 className="text-2xl font-bold text-white">Bills & Recurring Expenses</h2>
@@ -1067,7 +1119,7 @@
       };
 
       return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-500">
           <div className="flex justify-between items-center bg-surface p-6 rounded-xl border border-gray-700">
             <div>
               <h2 className="text-2xl font-bold text-white">3-Month Forecast Budget</h2>
@@ -1196,7 +1248,7 @@
       const { user, loading } = useAuth();
 
       if (loading) {
-        return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-blue-500">Loading...</div>;
+        return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-blue-500">Loading Auth...</div>;
       }
 
       if (!user) {
@@ -1213,7 +1265,7 @@
       if (user) return <Navigate to="/" />;
 
       return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 animate-in fade-in zoom-in duration-500">
           <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 text-center">
             <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
               <Wallet className="text-blue-500" size={32} />
@@ -1249,8 +1301,17 @@
       );
     };
 
-    const root = ReactDOM.createRoot(document.getElementById('root'));
+    const rootElement = document.getElementById('root');
+    if (!rootElement) {
+      throw new Error("Could not find root element to mount to");
+    }
+
+    const root = createRoot(rootElement);
     root.render(<App />);
+    
+    // Remove loader safely
+    const loader = document.getElementById('loading-screen');
+    if (loader) loader.style.display = 'none';
   </script>
 </body>
 </html>
