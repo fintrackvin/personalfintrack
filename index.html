@@ -530,7 +530,7 @@
             }
         }
 
-        // 2. Bills Logic
+        // 2. Bills Logic (Updated to include Status and Pay Action)
         window.renderBills = function() {
             const listEl = document.getElementById('bills-list');
             if (state.bills.length === 0) {
@@ -538,22 +538,56 @@
                 return;
             }
 
-            listEl.innerHTML = state.bills.map(bill => `
-                <div class="glass-panel p-5 rounded-xl border border-gray-800 flex justify-between items-start group hover:border-gray-700 transition-colors">
-                    <div>
-                        <h4 class="font-bold text-white text-lg">${bill.name}</h4>
-                        <div class="flex items-center gap-3 mt-2">
-                            <span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded uppercase font-medium tracking-wider">${bill.frequency}</span>
-                            <span class="text-xs text-gray-500"><i class="fa-regular fa-calendar mr-1"></i> Due day: ${bill.dueDay}</span>
+            const today = new Date();
+            const currentMonthStr = today.toISOString().slice(0, 7); // YYYY-MM
+
+            listEl.innerHTML = state.bills.map(bill => {
+                // Check status for THIS month
+                const ledgerEntry = state.ledger.find(l => l.refId === bill.id && l.date.startsWith(currentMonthStr));
+                const isPaid = !!ledgerEntry;
+                
+                // Construct due date string for this month
+                const dueDayStr = String(bill.dueDay).padStart(2, '0');
+                const dueDateStr = `${currentMonthStr}-${dueDayStr}`;
+
+                return `
+                <div class="glass-panel p-5 rounded-xl border border-gray-800 flex flex-col justify-between group hover:border-gray-700 transition-colors relative overflow-hidden">
+                    ${isPaid ? '<div class="absolute top-0 right-0 bg-green-500/10 text-green-500 text-[10px] font-bold px-2 py-1 rounded-bl-lg border-l border-b border-green-500/20">PAID THIS MONTH</div>' : ''}
+                    
+                    <div class="flex justify-between items-start mb-4">
+                        <div>
+                            <h4 class="font-bold text-white text-lg">${bill.name}</h4>
+                            <div class="flex items-center gap-3 mt-2">
+                                <span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded uppercase font-medium tracking-wider">${bill.frequency}</span>
+                                <span class="text-xs text-gray-500"><i class="fa-regular fa-calendar mr-1"></i> Due day: ${bill.dueDay}</span>
+                            </div>
+                            ${bill.endDate ? `<p class="text-xs text-orange-400 mt-2">Ends: ${bill.endDate}</p>` : ''}
                         </div>
-                        ${bill.endDate ? `<p class="text-xs text-orange-400 mt-2">Ends: ${bill.endDate}</p>` : ''}
+                        <div class="text-right">
+                            <p class="text-xl font-bold text-gray-200">${formatCurrency(bill.amount)}</p>
+                            <button onclick="editBill('${bill.id}')" class="mt-2 text-xs text-brand-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">Edit Details</button>
+                        </div>
                     </div>
-                    <div class="text-right">
-                        <p class="text-xl font-bold text-gray-200">${formatCurrency(bill.amount)}</p>
-                        <button onclick="editBill('${bill.id}')" class="mt-2 text-xs text-brand-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+
+                    <!-- Payment Action Area -->
+                    <div class="mt-2 pt-3 border-t border-gray-800 flex items-center justify-between">
+                        <div class="text-xs text-gray-500">
+                            ${isPaid 
+                                ? `<span class="text-green-400"><i class="fa-solid fa-check-circle mr-1"></i> Paid on ${ledgerEntry.date}</span>` 
+                                : `<span class="text-yellow-500"><i class="fa-regular fa-clock mr-1"></i> Due this month</span>`
+                            }
+                        </div>
+                        <button 
+                            onclick="triggerTransaction('bill', '${bill.id}', '${dueDateStr}', ${bill.amount}, '${bill.name}', ${isPaid})"
+                            class="text-sm px-3 py-1.5 rounded-lg font-medium transition-all ${isPaid 
+                                ? 'bg-gray-800 text-gray-400 hover:bg-red-900/30 hover:text-red-400' 
+                                : 'bg-brand-600 text-white hover:bg-brand-500 shadow-lg shadow-brand-600/20'}"
+                        >
+                            ${isPaid ? 'Undo / Unmark' : 'Mark as Paid'}
+                        </button>
                     </div>
                 </div>
-            `).join('');
+            `}).join('');
         }
 
         // 3. Forecast Logic (The Complex Part)
