@@ -1,0 +1,790 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FinTrack - Personal Finance</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Babel for processing JSX in browser -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #09090b;
+            color: #fafafa;
+            overflow: hidden; /* Prevent double scrollbars */
+        }
+        
+        /* Technical Dot Grid Background */
+        .bg-dot-grid {
+            background-size: 40px 40px;
+            background-image: radial-gradient(circle, #3f3f46 1px, transparent 1px);
+        }
+        
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #09090b; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #27272a; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #3f3f46; 
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            cursor: pointer;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "@heroicons/react/": "https://aistudiocdn.com/@heroicons/react@^2.2.0/",
+    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
+    "vite": "https://aistudiocdn.com/vite@^7.2.2",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+  }
+}
+</script>
+</head>
+<body>
+    <div id="root"></div>
+
+    <!-- MAIN APPLICATION SCRIPT -->
+    <script type="text/babel" data-type="module">
+        import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
+        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+        
+        // HeroIcons Imports
+        import { 
+            HomeIcon, 
+            BanknotesIcon, 
+            ChartBarIcon, 
+            ArrowLeftStartOnRectangleIcon,
+            PlusIcon,
+            TrashIcon,
+            PencilIcon,
+            CreditCardIcon,
+            WalletIcon,
+            CheckCircleIcon,
+            CalendarDaysIcon,
+            Cog6ToothIcon,
+            ShieldCheckIcon
+        } from 'https://esm.sh/@heroicons/react@2.1.1/24/outline';
+        
+        import { 
+            CheckCircleIcon as CheckCircleSolid 
+        } from 'https://esm.sh/@heroicons/react@2.1.1/24/solid';
+
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+        import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        // --- FIREBASE CONFIGURATION ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyCWr-FADGeiUDxNokX0fdLubp-mnPZMhOM",
+            authDomain: "fintrack-42a39.firebaseapp.com",
+            projectId: "fintrack-42a39",
+            storageBucket: "fintrack-42a39.firebasestorage.app",
+            messagingSenderId: "748412377392",
+            appId: "1:748412377392:web:918cc14cfcada4495fd0f5",
+            measurementId: "G-C0Y0G7C63V"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const googleProvider = new GoogleAuthProvider();
+
+        // --- INITIAL STATE & TYPES ---
+        const INITIAL_STATE = {
+            income: {
+                semiMonthlyAmount: 0,
+                payoutDay1: 15,
+                payoutDay2: 30
+            },
+            fixedExpenses: [],
+            unplannedExpenses: [],
+            paidStatus: {}
+        };
+
+        // --- COMPONENTS ---
+
+        // 1. Login Component
+        const Login = () => {
+            const [error, setError] = useState(null);
+            const [isLoggingIn, setIsLoggingIn] = useState(false);
+
+            const handleLogin = async () => {
+                setIsLoggingIn(true);
+                setError(null);
+                try {
+                    await signInWithPopup(auth, googleProvider);
+                } catch (err) {
+                    console.error(err);
+                    setError("Failed to sign in. Please try again.");
+                } finally {
+                    setIsLoggingIn(false);
+                }
+            };
+
+            return (
+                <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center relative overflow-hidden bg-dot-grid">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+                    <div className="relative z-10 max-w-md w-full mx-4 p-8 bg-zinc-900/80 border border-zinc-800 backdrop-blur-xl rounded-2xl shadow-2xl flex flex-col items-center text-center">
+                        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-600/20">
+                            <ChartBarIcon className="w-8 h-8 text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">FinTracker</h1>
+                        <p className="text-zinc-400 mb-8 text-sm">Secure cloud-synced personal finance dashboard.</p>
+                        <button 
+                            onClick={handleLogin}
+                            disabled={isLoggingIn}
+                            className="w-full bg-white hover:bg-zinc-200 text-black font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70"
+                        >
+                            {isLoggingIn ? (
+                                <div className="w-5 h-5 border-2 border-zinc-800 border-t-transparent rounded-full animate-spin"></div>
+                            ) : (
+                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
+                            )}
+                            <span>{isLoggingIn ? 'Signing in...' : 'Continue with Google'}</span>
+                        </button>
+                        {error && (
+                            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-xs">
+                                {error}
+                            </div>
+                        )}
+                        <div className="mt-8 flex items-center gap-2 text-[10px] text-zinc-600 uppercase tracking-wider font-medium">
+                            <ShieldCheckIcon className="w-3 h-3" />
+                            <span>Encrypted & Secure</span>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 2. Sidebar Component
+        const Sidebar = ({ activeView, onChangeView, user, onLogout }) => {
+            const menuItems = [
+                { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
+                { id: 'expenses', label: 'Bills & Expenses', icon: BanknotesIcon },
+                { id: 'forecast', label: '3-Month Forecast', icon: ChartBarIcon },
+            ];
+
+            return (
+                <div className="w-full md:w-64 bg-[#0c0c0e] border-r border-zinc-800 flex-shrink-0 flex flex-col h-full z-50">
+                    <div className="p-6 border-b border-zinc-800">
+                        <h1 className="text-xl font-bold text-white tracking-tighter flex items-center gap-2">
+                            <div className="w-6 h-6 bg-blue-600 rounded-md flex items-center justify-center text-xs text-white">FT</div>
+                            FinTracker
+                        </h1>
+                    </div>
+                    <nav className="flex-1 p-4 space-y-1">
+                        {menuItems.map(item => (
+                            <button
+                                key={item.id}
+                                onClick={() => onChangeView(item.id)}
+                                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                                    activeView === item.id 
+                                    ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
+                                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50'
+                                }`}
+                            >
+                                <item.icon className="w-5 h-5" />
+                                <span>{item.label}</span>
+                            </button>
+                        ))}
+                    </nav>
+                    <div className="p-4 border-t border-zinc-800">
+                        {user && (
+                            <div className="flex items-center gap-3 mb-4 px-2">
+                                {user.photoURL ? (
+                                    <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-zinc-700" />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 text-xs font-bold">
+                                        {user.displayName?.charAt(0) || 'U'}
+                                    </div>
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-medium text-white truncate">{user.displayName}</p>
+                                    <p className="text-xs text-zinc-500 truncate">{user.email}</p>
+                                </div>
+                            </div>
+                        )}
+                        <button 
+                            onClick={onLogout}
+                            className="w-full flex items-center justify-center gap-2 text-xs text-zinc-400 hover:text-red-400 hover:bg-red-400/10 py-2 rounded-md transition-colors"
+                        >
+                            <ArrowLeftStartOnRectangleIcon className="w-4 h-4" />
+                            Sign Out
+                        </button>
+                    </div>
+                </div>
+            );
+        };
+
+        // 3. Dashboard Component
+        const Dashboard = ({ state, onAddUnplanned, onUpdateUnplanned, onDeleteUnplanned }) => {
+            const [isAdding, setIsAdding] = useState(false);
+            const [editingId, setEditingId] = useState(null);
+            const [formState, setFormState] = useState({ name: '', amount: '', date: new Date().toISOString().split('T')[0] });
+
+            const currentDate = new Date();
+            const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+            
+            // Semi-monthly * 2 for monthly income
+            const monthlyIncome = (state.income.semiMonthlyAmount || 0) * 2;
+            
+            const currentMonthUnplanned = state.unplannedExpenses.filter(e => e.date.startsWith(currentMonthKey));
+            const totalUnplanned = currentMonthUnplanned.reduce((acc, curr) => acc + curr.amount, 0);
+
+            const totalPaidFixed = state.fixedExpenses.reduce((acc, expense) => {
+                const key = `${expense.id}_${currentMonthKey}`;
+                if (state.paidStatus[key]) {
+                    return acc + expense.amount;
+                }
+                return acc;
+            }, 0);
+
+            const totalPaid = totalUnplanned + totalPaidFixed;
+            const netCash = monthlyIncome - totalPaid;
+            
+            const totalFixedProjected = state.fixedExpenses.reduce((acc, expense) => {
+                if (expense.terminationDate && expense.terminationDate < currentMonthKey + '-01') return acc;
+                return acc + (expense.frequency === 'semi-monthly' ? expense.amount * 2 : expense.amount);
+            }, 0);
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (editingId) {
+                    onUpdateUnplanned({ 
+                        id: editingId, 
+                        name: formState.name, 
+                        amount: parseFloat(formState.amount), 
+                        date: formState.date 
+                    });
+                    setEditingId(null);
+                } else {
+                    onAddUnplanned({ 
+                        name: formState.name, 
+                        amount: parseFloat(formState.amount), 
+                        date: formState.date 
+                    });
+                }
+                setIsAdding(false);
+                setFormState({ name: '', amount: '', date: new Date().toISOString().split('T')[0] });
+            };
+
+            const startEdit = (item) => {
+                setFormState({ name: item.name, amount: item.amount.toString(), date: item.date });
+                setEditingId(item.id);
+                setIsAdding(true);
+            };
+
+            return (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                    <header>
+                        <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard</h2>
+                        <p className="text-zinc-400 text-sm">Overview for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
+                    </header>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="p-5 rounded-xl bg-zinc-900 border border-zinc-800/50 relative overflow-hidden">
+                            <div className="relative z-10">
+                                <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-1">Net Cash Available</p>
+                                <h3 className={`text-3xl font-bold ${netCash < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                    ${netCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </h3>
+                                <p className="text-xs text-zinc-600 mt-2">Income - (Paid Bills + Unplanned)</p>
+                            </div>
+                            <BanknotesIcon className="absolute right-4 top-4 w-12 h-12 text-zinc-800/50" />
+                        </div>
+                        <div className="p-5 rounded-xl bg-zinc-900 border border-zinc-800/50 relative overflow-hidden">
+                            <div className="relative z-10">
+                                <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-1">Total Expenses Paid</p>
+                                <h3 className="text-3xl font-bold text-white">
+                                    ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </h3>
+                                <div className="flex gap-2 mt-2 text-xs">
+                                    <span className="text-blue-400">Fixed: ${totalPaidFixed.toLocaleString()}</span>
+                                    <span className="text-orange-400">Unplanned: ${totalUnplanned.toLocaleString()}</span>
+                                </div>
+                            </div>
+                            <CreditCardIcon className="absolute right-4 top-4 w-12 h-12 text-zinc-800/50" />
+                        </div>
+                        <div className="p-5 rounded-xl bg-zinc-900 border border-zinc-800/50 relative overflow-hidden">
+                            <div className="relative z-10">
+                                <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-1">Projected Remaining</p>
+                                <h3 className="text-3xl font-bold text-zinc-300">
+                                    ${(monthlyIncome - totalFixedProjected - totalUnplanned).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </h3>
+                                <p className="text-xs text-zinc-600 mt-2">Assuming all bills paid</p>
+                            </div>
+                            <WalletIcon className="absolute right-4 top-4 w-12 h-12 text-zinc-800/50" />
+                        </div>
+                    </div>
+
+                    <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
+                        <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
+                            <h3 className="font-medium text-white flex items-center gap-2">
+                                <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
+                                Unplanned Expenses
+                            </h3>
+                            <button 
+                                onClick={() => { setIsAdding(true); setEditingId(null); setFormState({name:'', amount:'', date: new Date().toISOString().split('T')[0]}); }}
+                                className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md transition-colors flex items-center gap-1"
+                            >
+                                <PlusIcon className="w-3 h-3" /> Add Expense
+                            </button>
+                        </div>
+
+                        {isAdding && (
+                            <form onSubmit={handleSubmit} className="p-4 bg-zinc-800/30 border-b border-zinc-800 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                <div className="md:col-span-3">
+                                    <label className="block text-[10px] uppercase text-zinc-500 mb-1">Date</label>
+                                    <input required type="date" value={formState.date} onChange={e => setFormState({...formState, date: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="md:col-span-5">
+                                    <label className="block text-[10px] uppercase text-zinc-500 mb-1">Description</label>
+                                    <input required type="text" placeholder="e.g. Groceries" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-[10px] uppercase text-zinc-500 mb-1">Amount</label>
+                                    <input required type="number" step="0.01" placeholder="0.00" value={formState.amount} onChange={e => setFormState({...formState, amount: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="md:col-span-2 flex gap-2">
+                                    <button type="submit" className="flex-1 bg-green-600 hover:bg-green-500 text-white text-sm py-2 rounded">{editingId ? 'Save' : 'Add'}</button>
+                                    <button type="button" onClick={() => setIsAdding(false)} className="px-3 bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-2 rounded">Cancel</button>
+                                </div>
+                            </form>
+                        )}
+                        <div className="divide-y divide-zinc-800/50">
+                            {currentMonthUnplanned.length === 0 ? (
+                                <div className="p-8 text-center text-zinc-500 text-sm">No unplanned expenses this month.</div>
+                            ) : (
+                                currentMonthUnplanned.map(expense => (
+                                    <div key={expense.id} className="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors group">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 text-xs font-mono">
+                                                {new Date(expense.date).getDate()}
+                                            </div>
+                                            <div>
+                                                <div className="font-medium text-zinc-200">{expense.name}</div>
+                                                <div className="text-xs text-zinc-500">{expense.date}</div>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-6">
+                                            <div className="font-bold text-white">-${expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                <button onClick={() => startEdit(expense)} className="p-1.5 text-zinc-400 hover:text-blue-400 hover:bg-blue-400/10 rounded"><PencilIcon className="w-4 h-4" /></button>
+                                                <button onClick={() => onDeleteUnplanned(expense.id)} className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-400/10 rounded"><TrashIcon className="w-4 h-4" /></button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 4. Expenses Page Component
+        const ExpensesPage = ({ state, onAdd, onUpdate, onDelete, onTogglePaid }) => {
+            const [isAdding, setIsAdding] = useState(false);
+            const [editingId, setEditingId] = useState(null);
+            const [formState, setFormState] = useState({ name: '', amount: '', frequency: 'monthly', dueDay: '1', terminationDate: '' });
+
+            const currentDate = new Date();
+            const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const payload = {
+                    name: formState.name,
+                    amount: parseFloat(formState.amount),
+                    frequency: formState.frequency,
+                    dueDay: parseInt(formState.dueDay),
+                    terminationDate: formState.terminationDate || undefined
+                };
+                if (editingId) {
+                    onUpdate({ id: editingId, ...payload });
+                    setEditingId(null);
+                } else {
+                    onAdd(payload);
+                }
+                setIsAdding(false);
+                setFormState({ name: '', amount: '', frequency: 'monthly', dueDay: '1', terminationDate: '' });
+            };
+
+            const startEdit = (item) => {
+                setFormState({
+                    name: item.name,
+                    amount: item.amount.toString(),
+                    frequency: item.frequency,
+                    dueDay: item.dueDay.toString(),
+                    terminationDate: item.terminationDate || ''
+                });
+                setEditingId(item.id);
+                setIsAdding(true);
+            };
+
+            return (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                    <header className="flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-bold text-white tracking-tight">Fixed Expenses</h2>
+                            <p className="text-zinc-400 text-sm">Manage recurring bills</p>
+                        </div>
+                        <button onClick={() => { setIsAdding(!isAdding); setEditingId(null); }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
+                            <PlusIcon className="w-4 h-4" /> New Bill
+                        </button>
+                    </header>
+
+                    {isAdding && (
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+                            <h3 className="text-white font-medium mb-4">{editingId ? 'Edit Expense' : 'Add Recurring Expense'}</h3>
+                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                                <div className="lg:col-span-2">
+                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Name</label>
+                                    <input required type="text" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="e.g. Rent" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Amount</label>
+                                    <input required type="number" step="0.01" value={formState.amount} onChange={e => setFormState({...formState, amount: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="0.00" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Frequency</label>
+                                    <select value={formState.frequency} onChange={e => setFormState({...formState, frequency: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
+                                        <option value="monthly">Monthly</option>
+                                        <option value="semi-monthly">Semi-Monthly</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Due Day</label>
+                                    <input required type="number" min="1" max="31" value={formState.dueDay} onChange={e => setFormState({...formState, dueDay: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Ends On (Opt)</label>
+                                    <input type="date" value={formState.terminationDate} onChange={e => setFormState({...formState, terminationDate: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="lg:col-span-6 flex justify-end gap-2 mt-2">
+                                    <button type="button" onClick={() => setIsAdding(false)} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded hover:bg-zinc-700 text-sm">Cancel</button>
+                                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">{editingId ? 'Save' : 'Add'}</button>
+                                </div>
+                            </form>
+                        </div>
+                    )}
+
+                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
+                        <div className="grid grid-cols-12 gap-4 p-4 border-b border-zinc-800 bg-zinc-900 text-xs font-medium text-zinc-500 uppercase tracking-wider">
+                            <div className="col-span-4">Expense</div>
+                            <div className="col-span-2">Amount</div>
+                            <div className="col-span-2">Due Date</div>
+                            <div className="col-span-2 text-center">Status</div>
+                            <div className="col-span-2 text-right">Actions</div>
+                        </div>
+                        <div className="divide-y divide-zinc-800">
+                            {state.fixedExpenses.map(expense => {
+                                const isPaid = state.paidStatus[`${expense.id}_${currentMonthKey}`];
+                                const isTerminated = expense.terminationDate && expense.terminationDate < currentMonthKey + '-01';
+                                if (isTerminated) return null;
+                                return (
+                                    <div key={expense.id} className={`grid grid-cols-12 gap-4 p-4 items-center hover:bg-zinc-800/30 transition-colors ${isPaid ? 'opacity-60' : ''}`}>
+                                        <div className="col-span-4">
+                                            <div className="font-medium text-white">{expense.name}</div>
+                                            <div className="text-[10px] text-zinc-500">{expense.frequency}</div>
+                                        </div>
+                                        <div className="col-span-2 font-mono text-zinc-300">${expense.amount.toLocaleString()}</div>
+                                        <div className="col-span-2 text-sm text-zinc-400">Day {expense.dueDay}</div>
+                                        <div className="col-span-2 flex justify-center">
+                                            <button onClick={() => onTogglePaid(expense.id, currentMonthKey)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isPaid ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-500'}`}>
+                                                {isPaid ? <CheckCircleSolid className="w-4 h-4" /> : <CheckCircleIcon className="w-4 h-4" />}
+                                                {isPaid ? 'Paid' : 'Mark Paid'}
+                                            </button>
+                                        </div>
+                                        <div className="col-span-2 flex justify-end gap-2">
+                                            <button onClick={() => startEdit(expense)} className="p-1.5 text-zinc-500 hover:text-blue-400 rounded hover:bg-zinc-800"><PencilIcon className="w-4 h-4" /></button>
+                                            <button onClick={() => onDelete(expense.id)} className="p-1.5 text-zinc-500 hover:text-red-400 rounded hover:bg-zinc-800"><TrashIcon className="w-4 h-4" /></button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {state.fixedExpenses.length === 0 && <div className="p-8 text-center text-zinc-500 text-sm">No fixed expenses yet.</div>}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // 5. Forecast Page Component
+        const ForecastPage = ({ state, onUpdateIncome }) => {
+            const [isEditingIncome, setIsEditingIncome] = useState(false);
+            const [tempIncome, setTempIncome] = useState(state.income);
+
+            const months = [];
+            const today = new Date();
+            for (let i = 0; i < 3; i++) {
+                const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
+                months.push({
+                    date: d,
+                    key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
+                    name: d.toLocaleString('default', { month: 'long', year: 'numeric' })
+                });
+            }
+
+            const saveIncome = (e) => {
+                e.preventDefault();
+                onUpdateIncome(tempIncome);
+                setIsEditingIncome(false);
+            };
+
+            return (
+                <div className="space-y-6 animate-in fade-in duration-500">
+                     <header className="flex justify-between items-center">
+                        <div>
+                            <h2 className="text-2xl font-bold text-white tracking-tight">3-Month Forecast</h2>
+                            <p className="text-zinc-400 text-sm">Projected cash flow</p>
+                        </div>
+                        <button onClick={() => setIsEditingIncome(true)} className="text-zinc-400 hover:text-white flex items-center gap-2 text-xs border border-zinc-700 rounded px-3 py-1.5 hover:bg-zinc-800 transition-colors">
+                            <Cog6ToothIcon className="w-4 h-4" /> Income Settings
+                        </button>
+                    </header>
+
+                    {isEditingIncome && (
+                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
+                             <h3 className="text-white font-medium mb-4">Income Configuration</h3>
+                             <form onSubmit={saveIncome} className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                     <label className="block text-xs uppercase text-zinc-500 mb-1">Semi-Monthly Net Income</label>
+                                     <div className="relative">
+                                        <span className="absolute left-3 top-2 text-zinc-500">$</span>
+                                        <input type="number" required value={tempIncome.semiMonthlyAmount} onChange={e => setTempIncome({...tempIncome, semiMonthlyAmount: parseFloat(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded pl-6 pr-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                     </div>
+                                     <p className="text-[10px] text-zinc-500 mt-1">Amount per paycheck</p>
+                                </div>
+                                <div>
+                                     <label className="block text-xs uppercase text-zinc-500 mb-1">Payout Date 1 (Day)</label>
+                                     <input type="number" min="1" max="31" required value={tempIncome.payoutDay1} onChange={e => setTempIncome({...tempIncome, payoutDay1: parseInt(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div>
+                                     <label className="block text-xs uppercase text-zinc-500 mb-1">Payout Date 2 (Day)</label>
+                                     <input type="number" min="1" max="31" required value={tempIncome.payoutDay2} onChange={e => setTempIncome({...tempIncome, payoutDay2: parseInt(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                </div>
+                                <div className="md:col-span-3 flex justify-end gap-2 mt-2">
+                                     <button type="button" onClick={() => setIsEditingIncome(false)} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded hover:bg-zinc-700 text-sm">Cancel</button>
+                                     <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">Update Income</button>
+                                </div>
+                             </form>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        {months.map((month, index) => {
+                            const incomePerPayout = state.income.semiMonthlyAmount || 0;
+                            const totalMonthlyIncome = incomePerPayout * 2;
+                            const monthlyExpenses = state.fixedExpenses.filter(e => {
+                                if (e.terminationDate && e.terminationDate < month.key + '-01') return false;
+                                return true;
+                            });
+                            const totalExpenses = monthlyExpenses.reduce((acc, e) => acc + (e.frequency === 'semi-monthly' ? e.amount * 2 : e.amount), 0);
+                            const balance = totalMonthlyIncome - totalExpenses;
+
+                            return (
+                                <div key={month.key} className={`rounded-xl border ${index === 0 ? 'bg-zinc-900/80 border-blue-500/30 ring-1 ring-blue-500/20' : 'bg-zinc-900/30 border-zinc-800'}`}>
+                                    <div className="p-4 border-b border-zinc-800/50 flex justify-between items-center">
+                                        <div className="flex items-center gap-2 font-bold text-zinc-100">
+                                            <CalendarDaysIcon className="w-5 h-5 text-zinc-500" />
+                                            {month.name}
+                                        </div>
+                                        {index === 0 && <span className="text-[10px] font-bold bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded border border-blue-800">CURRENT</span>}
+                                    </div>
+                                    <div className="p-4 space-y-4">
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider">Income Events</p>
+                                            <div className="flex justify-between items-center text-sm p-2 bg-zinc-800/30 rounded border border-zinc-800/50">
+                                                <span className="text-zinc-300">Payout 1 ({state.income.payoutDay1}th)</span>
+                                                <span className="text-emerald-400 font-mono">+${incomePerPayout.toLocaleString()}</span>
+                                            </div>
+                                            <div className="flex justify-between items-center text-sm p-2 bg-zinc-800/30 rounded border border-zinc-800/50">
+                                                <span className="text-zinc-300">Payout 2 ({state.income.payoutDay2}th)</span>
+                                                <span className="text-emerald-400 font-mono">+${incomePerPayout.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <p className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider">Projected Expenses</p>
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-zinc-400">Fixed Bills ({monthlyExpenses.length})</span>
+                                                <span className="text-red-400 font-mono">-${totalExpenses.toLocaleString()}</span>
+                                            </div>
+                                        </div>
+                                        <div className="pt-4 border-t border-zinc-800 flex justify-between items-center">
+                                            <span className="text-sm font-medium text-zinc-300">Projected Net</span>
+                                            <span className={`text-lg font-bold ${balance >= 0 ? 'text-white' : 'text-red-500'}`}>
+                                                ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            );
+        };
+
+        // 6. Main App Component
+        const App = () => {
+            const [user, setUser] = useState(null);
+            const [loading, setLoading] = useState(true);
+            const [state, setState] = useState(INITIAL_STATE);
+            const [activeView, setActiveView] = useState('dashboard');
+            const [dataLoaded, setDataLoaded] = useState(false);
+            const [saveStatus, setSaveStatus] = useState('saved');
+
+            useEffect(() => {
+                const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+                    setUser(currentUser);
+                    setLoading(true);
+
+                    if (currentUser) {
+                        try {
+                            const docRef = doc(db, 'users', currentUser.uid);
+                            const docSnap = await getDoc(docRef);
+
+                            if (docSnap.exists()) {
+                                const data = docSnap.data();
+                                // Migration for old monthly data if present
+                                if (data.income && data.income.monthlyAmount) {
+                                    data.income.semiMonthlyAmount = data.income.monthlyAmount / 2;
+                                    delete data.income.monthlyAmount;
+                                }
+                                setState({ ...INITIAL_STATE, ...data });
+                            } else {
+                                await setDoc(docRef, INITIAL_STATE);
+                                setState(INITIAL_STATE);
+                            }
+                        } catch (error) {
+                            console.error("Error fetching data:", error);
+                        } finally {
+                            setDataLoaded(true);
+                            setLoading(false);
+                        }
+                    } else {
+                        setState(INITIAL_STATE);
+                        setDataLoaded(false);
+                        setLoading(false);
+                    }
+                });
+                return () => unsubscribe();
+            }, []);
+
+            useEffect(() => {
+                if (!user || !dataLoaded) return;
+                const saveData = async () => {
+                    setSaveStatus('saving');
+                    try {
+                        await setDoc(doc(db, 'users', user.uid), state);
+                        setSaveStatus('saved');
+                    } catch (error) {
+                        console.error("Error saving:", error);
+                        setSaveStatus('error');
+                    }
+                };
+                const timeoutId = setTimeout(saveData, 1000);
+                return () => clearTimeout(timeoutId);
+            }, [state, user, dataLoaded]);
+
+            const addFixedExpense = (expense) => {
+                const newExpense = { ...expense, id: crypto.randomUUID() };
+                setState(prev => ({ ...prev, fixedExpenses: [...prev.fixedExpenses, newExpense] }));
+            };
+
+            const updateFixedExpense = (expense) => {
+                setState(prev => ({ ...prev, fixedExpenses: prev.fixedExpenses.map(e => e.id === expense.id ? expense : e) }));
+            };
+
+            const deleteFixedExpense = (id) => {
+                setState(prev => ({ ...prev, fixedExpenses: prev.fixedExpenses.filter(e => e.id !== id) }));
+            };
+
+            const togglePaid = (id, monthKey) => {
+                setState(prev => {
+                    const key = `${id}_${monthKey}`;
+                    return { ...prev, paidStatus: { ...prev.paidStatus, [key]: !prev.paidStatus[key] } };
+                });
+            };
+
+            const addUnplanned = (expense) => {
+                const newExpense = { ...expense, id: crypto.randomUUID() };
+                setState(prev => ({ ...prev, unplannedExpenses: [newExpense, ...prev.unplannedExpenses] }));
+            };
+
+            const updateUnplanned = (expense) => {
+                setState(prev => ({ ...prev, unplannedExpenses: prev.unplannedExpenses.map(e => e.id === expense.id ? expense : e) }));
+            };
+
+            const deleteUnplanned = (id) => {
+                setState(prev => ({ ...prev, unplannedExpenses: prev.unplannedExpenses.filter(e => e.id !== id) }));
+            };
+
+            const updateIncome = (income) => {
+                setState(prev => ({ ...prev, income }));
+            };
+
+            const handleLogout = async () => await signOut(auth);
+
+            if (loading) {
+                return (
+                    <div className="h-screen w-full bg-[#09090b] flex items-center justify-center">
+                        <div className="flex flex-col items-center space-y-4">
+                            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                            <div className="text-zinc-500 text-sm animate-pulse">Loading FinTracker...</div>
+                        </div>
+                    </div>
+                );
+            }
+
+            if (!user) return <Login />;
+
+            return (
+                <div className="flex h-screen w-full bg-[#09090b] overflow-hidden">
+                    <Sidebar activeView={activeView} onChangeView={setActiveView} user={user} onLogout={handleLogout} />
+                    <main className="flex-1 overflow-y-auto h-full bg-dot-grid relative">
+                        <div className="absolute top-4 right-4 z-50 pointer-events-none">
+                            {saveStatus === 'saving' && <span className="text-[10px] text-zinc-500 bg-zinc-900/50 border border-zinc-800 px-2 py-1 rounded-full flex items-center gap-2"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>Syncing...</span>}
+                            {saveStatus === 'error' && <span className="text-[10px] text-red-400 bg-red-900/20 border border-red-800 px-2 py-1 rounded-full">Sync Error</span>}
+                        </div>
+                        <div className="max-w-5xl mx-auto p-6 md:p-12 min-h-full">
+                            {activeView === 'dashboard' && <Dashboard state={state} onAddUnplanned={addUnplanned} onUpdateUnplanned={updateUnplanned} onDeleteUnplanned={deleteUnplanned} />}
+                            {activeView === 'expenses' && <ExpensesPage state={state} onAdd={addFixedExpense} onUpdate={updateFixedExpense} onDelete={deleteFixedExpense} onTogglePaid={togglePaid} />}
+                            {activeView === 'forecast' && <ForecastPage state={state} onUpdateIncome={updateIncome} />}
+                        </div>
+                    </main>
+                </div>
+            );
+        };
+
+        // Mount App
+        const root = createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
