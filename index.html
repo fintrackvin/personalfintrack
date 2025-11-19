@@ -1,1317 +1,885 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>FinTrack AI</title>
-  
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      darkMode: 'class',
-      theme: {
-        extend: {
-          colors: {
-            background: '#0f172a', // slate-900
-            surface: '#1e293b', // slate-800
-            primary: '#3b82f6', // blue-500
-            secondary: '#64748b', // slate-500
-            accent: '#8b5cf6', // violet-500
-            success: '#22c55e', // green-500
-            danger: '#ef4444', // red-500
-          }
-        }
-      }
-    }
-  </script>
-
-  <!-- Babel for JSX transformation -->
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Import Map: Defines where to load modules from -->
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@18.3.1",
-    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
-    "react-router-dom": "https://esm.sh/react-router-dom@6.22.3?deps=react@18.3.1,react-dom@18.3.1",
-    "recharts": "https://esm.sh/recharts@2.12.7?deps=react@18.3.1,react-dom@18.3.1",
-    "lucide-react": "https://esm.sh/lucide-react@0.344.0?deps=react@18.3.1",
-    "@google/genai": "https://esm.sh/@google/genai@0.1.1",
-    "firebase/app": "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js",
-    "firebase/auth": "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js",
-    "firebase/database": "https://www.gstatic.com/firebasejs/10.8.1/firebase-database.js",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/"
-  }
-}
-</script>
-
-  <style>
-    /* Custom Scrollbar */
-    ::-webkit-scrollbar { width: 8px; height: 8px; }
-    ::-webkit-scrollbar-track { background: #0f172a; }
-    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
-    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinTrack - Personal Finance Dashboard</title>
     
-    /* Loading Animation */
-    .loader {
-      border: 4px solid #1e293b;
-      border-top: 4px solid #3b82f6;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  </style>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            850: '#1f2937',
+                            900: '#111827',
+                            950: '#0b0f19',
+                        },
+                        brand: {
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Google Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        
+        .glass-panel {
+            background: rgba(31, 41, 55, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+    </style>
 </head>
-<body class="bg-background text-white antialiased min-h-screen overflow-hidden">
-  
-  <!-- Loading State (Visible until React mounts) -->
-  <div id="loading-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-background z-50">
-    <div class="loader mb-4"></div>
-    <h2 class="text-xl font-bold text-blue-500">FinTrack AI</h2>
-    <p class="text-gray-500 text-sm mt-2">Loading modules...</p>
-  </div>
+<body class="bg-gray-950 text-gray-100 min-h-screen flex flex-col">
 
-  <!-- Error Display (Visible if crash) -->
-  <div id="error-screen" class="fixed inset-0 flex flex-col items-center justify-center bg-red-900/20 z-[60] hidden p-8 text-center">
-    <h2 class="text-2xl font-bold text-red-500 mb-2">Application Error</h2>
-    <p class="text-gray-300 mb-4">Something went wrong while loading the application.</p>
-    <pre id="error-message" class="bg-black/50 p-4 rounded text-left text-red-300 text-xs overflow-auto max-w-full"></pre>
-    <button onclick="window.location.reload()" class="mt-6 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded">Reload Page</button>
-  </div>
-
-  <div id="root"></div>
-
-  <!-- Global Error Handler -->
-  <script>
-    window.onerror = function(msg, url, line, col, error) {
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('error-screen').style.display = 'flex';
-      document.getElementById('error-message').textContent = `Error: ${msg}\nLine: ${line}\nFile: ${url}`;
-      console.error(error);
-    };
-    // Catch unhandled promise rejections
-    window.onunhandledrejection = function(event) {
-      document.getElementById('loading-screen').style.display = 'none';
-      document.getElementById('error-screen').style.display = 'flex';
-      document.getElementById('error-message').textContent = `Promise Error: ${event.reason}`;
-    };
-  </script>
-
-  <!-- Application Code -->
-  <script type="text/babel" data-type="module">
-    /***********************************************************
-     * IMPORTS
-     ***********************************************************/
-    import React, { useState, useEffect, useMemo, createContext, useContext } from 'react';
-    import { createRoot } from 'react-dom/client';
-    import { HashRouter, Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
-    import { 
-      LayoutDashboard, Receipt, CalendarClock, LogOut, PieChart as IconPieChart, 
-      Plus, Trash2, Edit2, Sparkles, Wallet, CheckCircle, AlertCircle, Settings, Save, Check 
-    } from 'lucide-react';
-    import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-    import { initializeApp } from 'firebase/app';
-    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
-    import { getDatabase, ref, set, push, onValue, remove, update } from 'firebase/database';
-    import { GoogleGenAI } from '@google/genai';
-
-    // Hide loader once script starts executing (though React mount will be the real finish)
-    // We'll hide it inside the root render
-    
-    /***********************************************************
-     * CONFIGURATION & TYPES
-     ***********************************************************/
-    
-    // Fake process.env for GenAI SDK if needed, though we usually pass apiKey in constructor
-    window.process = { env: { API_KEY: '' } }; 
-
-    // Firebase Config
-    const firebaseConfig = {
-      apiKey: "AIzaSyCWr-FADGeiUDxNokX0fdLubp-mnPZMhOM",
-      authDomain: "fintrack-42a39.firebaseapp.com",
-      databaseURL: "https://fintrack-42a39-default-rtdb.asia-southeast1.firebasedatabase.app",
-      projectId: "fintrack-42a39",
-      storageBucket: "fintrack-42a39.firebasestorage.app",
-      messagingSenderId: "748412377392",
-      appId: "1:748412377392:web:918cc14cfcada4495fd0f5",
-      measurementId: "G-C0Y0G7C63V"
-    };
-
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
-    const googleProvider = new GoogleAuthProvider();
-
-    // Types (Constants in JS)
-    const TransactionType = {
-      INCOME: 'income',
-      EXPENSE: 'expense',
-      BILL_PAYMENT: 'bill_payment'
-    };
-
-    const Frequency = {
-      ONCE: 'once',
-      MONTHLY: 'monthly',
-      SEMI_MONTHLY: 'semi_monthly'
-    };
-
-    /***********************************************************
-     * SERVICES
-     ***********************************************************/
-    const signInWithGoogle = async () => {
-      try {
-        await signInWithPopup(auth, googleProvider);
-      } catch (error) {
-        console.error("Error signing in", error);
-        alert("Failed to sign in: " + error.message);
-      }
-    };
-
-    const logOut = async () => {
-      try {
-        await firebaseSignOut(auth);
-      } catch (error) {
-        console.error("Error signing out", error);
-      }
-    };
-
-    const analyzeFinances = async (settings, bills, transactions) => {
-      // Use prompt/localStorage for key in this static demo
-      let apiKey = localStorage.getItem('GEMINI_API_KEY');
-      if (!apiKey) {
-        apiKey = prompt("Please enter your Google Gemini API Key to use AI features:");
-        if (apiKey) localStorage.setItem('GEMINI_API_KEY', apiKey);
-      }
-      
-      if (!apiKey) return "API Key is required for AI advice.";
-
-      const ai = new GoogleGenAI({ apiKey: apiKey });
-
-      // Filter recent transactions (last 30 days)
-      const now = new Date();
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(now.getDate() - 30);
-
-      const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
-      
-      const prompt = `
-        You are a financial advisor. Here is the user's financial data for the last 30 days:
-        
-        Monthly Base Income: ${settings.monthlyIncome}
-        Pay Dates: ${settings.payDate1}th and ${settings.payDate2}th
-        
-        Recurring Bills:
-        ${bills.map(b => `- ${b.name}: ${b.amount} (Due day: ${b.dueDay})`).join('\n')}
-        
-        Recent Transactions:
-        ${recentTx.map(t => `- ${t.date}: ${t.description} (${t.type}) - ${t.amount}`).join('\n')}
-        
-        Please provide a concise summary of their financial health, point out any excessive spending, and give 3 actionable tips to save money or improve their budget. Keep it under 200 words.
-      `;
-
-      try {
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: prompt,
-        });
-        return response.text || "Could not generate advice.";
-      } catch (error) {
-        console.error("Gemini Error:", error);
-        if (error.message.includes('403') || error.message.includes('key')) {
-           localStorage.removeItem('GEMINI_API_KEY'); // Reset invalid key
-           return "Invalid API Key. Please try again.";
-        }
-        return "Sorry, I encountered an error analyzing your data.";
-      }
-    };
-
-    /***********************************************************
-     * CONTEXTS
-     ***********************************************************/
-    
-    // --- Auth Context ---
-    const AuthContext = createContext({ user: null, loading: true });
-    const useAuth = () => useContext(AuthContext);
-
-    const AuthProvider = ({ children }) => {
-      const [user, setUser] = useState(null);
-      const [loading, setLoading] = useState(true);
-
-      useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-          setUser(currentUser);
-          setLoading(false);
-        });
-        return () => unsubscribe();
-      }, []);
-
-      return (
-        <AuthContext.Provider value={{ user, loading }}>
-          {children}
-        </AuthContext.Provider>
-      );
-    };
-
-    // --- Finance Context ---
-    const defaultSettings = {
-      monthlyIncome: 0,
-      payDate1: 15,
-      payDate2: 30
-    };
-
-    const FinanceContext = createContext(undefined);
-    const useFinance = () => {
-      const context = useContext(FinanceContext);
-      if (!context) throw new Error("useFinance must be used within FinanceProvider");
-      return context;
-    };
-
-    const FinanceProvider = ({ children }) => {
-      const { user } = useAuth();
-      const [settings, setSettings] = useState(defaultSettings);
-      const [bills, setBills] = useState([]);
-      const [transactions, setTransactions] = useState([]);
-      const [loadingData, setLoadingData] = useState(true);
-
-      useEffect(() => {
-        if (!user) {
-          setBills([]);
-          setTransactions([]);
-          setSettings(defaultSettings);
-          setLoadingData(false);
-          return;
-        }
-
-        const userRef = ref(db, `users/${user.uid}`);
-        
-        const unsubscribe = onValue(userRef, (snapshot) => {
-          const data = snapshot.val();
-          if (data) {
-            setSettings(data.settings || defaultSettings);
-            
-            const loadedBills = [];
-            if (data.bills) {
-              Object.entries(data.bills).forEach(([key, val]) => {
-                loadedBills.push({ ...val, id: key });
-              });
-            }
-            setBills(loadedBills);
-
-            const loadedTransactions = [];
-            if (data.transactions) {
-              Object.entries(data.transactions).forEach(([key, val]) => {
-                loadedTransactions.push({ ...val, id: key });
-              });
-            }
-            // Sort transactions by date descending
-            loadedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-            setTransactions(loadedTransactions);
-          } else {
-            setSettings(defaultSettings);
-            setBills([]);
-            setTransactions([]);
-          }
-          setLoadingData(false);
-        }, (error) => {
-          console.error("Firebase Error:", error);
-          setLoadingData(false);
-        });
-
-        return () => unsubscribe();
-      }, [user]);
-
-      const updateSettings = async (newSettings) => {
-        if (!user) return;
-        await set(ref(db, `users/${user.uid}/settings`), newSettings);
-      };
-
-      const addBill = async (bill) => {
-        if (!user) return;
-        const newBillRef = push(ref(db, `users/${user.uid}/bills`));
-        await set(newBillRef, bill);
-      };
-
-      const updateBill = async (id, bill) => {
-        if (!user) return;
-        await update(ref(db, `users/${user.uid}/bills/${id}`), bill);
-      };
-
-      const deleteBill = async (id) => {
-        if (!user) return;
-        await remove(ref(db, `users/${user.uid}/bills/${id}`));
-      };
-
-      const addTransaction = async (transaction) => {
-        if (!user) return;
-        const newTxRef = push(ref(db, `users/${user.uid}/transactions`));
-        await set(newTxRef, transaction);
-      };
-
-      const updateTransaction = async (id, transaction) => {
-        if (!user) return;
-        await update(ref(db, `users/${user.uid}/transactions/${id}`), transaction);
-      };
-
-      const deleteTransaction = async (id) => {
-        if (!user) return;
-        await remove(ref(db, `users/${user.uid}/transactions/${id}`));
-      };
-
-      return (
-        <FinanceContext.Provider value={{
-          settings, bills, transactions, updateSettings, addBill, updateBill, 
-          deleteBill, addTransaction, updateTransaction, deleteTransaction, loadingData
-        }}>
-          {children}
-        </FinanceContext.Provider>
-      );
-    };
-
-    /***********************************************************
-     * COMPONENTS
-     ***********************************************************/
-
-    const Layout = ({ children }) => {
-      const location = useLocation();
-      const { user } = useAuth();
-
-      const navItems = [
-        { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-        { path: '/bills', label: 'Bills & Expenses', icon: <Receipt size={20} /> },
-        { path: '/forecast', label: '3-Month Forecast', icon: <CalendarClock size={20} /> },
-      ];
-
-      return (
-        <div className="flex flex-col md:flex-row min-h-screen text-gray-100">
-          {/* Sidebar */}
-          <aside className="w-full md:w-64 bg-surface border-b md:border-b-0 md:border-r border-gray-700 flex flex-col shrink-0">
-            <div className="p-6 flex items-center gap-2 border-b border-gray-700">
-              <IconPieChart className="text-primary" size={28} />
-              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
-                FinTrack AI
-              </h1>
-            </div>
-
-            <nav className="flex-1 p-4 space-y-2">
-              {navItems.map((item) => (
-                <Link
-                  key={item.path}
-                  to={item.path}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                    location.pathname === item.path
-                      ? 'bg-primary/20 text-primary border border-primary/30'
-                      : 'hover:bg-gray-700 text-gray-300'
-                  }`}
-                >
-                  {item.icon}
-                  <span className="font-medium">{item.label}</span>
-                </Link>
-              ))}
-            </nav>
-
-            <div className="p-4 border-t border-gray-700">
-              <div className="flex items-center gap-3 mb-4 px-2">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold">
-                  {user?.displayName ? user.displayName.charAt(0) : 'U'}
+    <!-- Navbar -->
+    <nav class="border-b border-gray-800 bg-gray-900/80 backdrop-blur sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center shadow-lg shadow-brand-500/20">
+                        <i class="fa-solid fa-wallet text-white text-sm"></i>
+                    </div>
+                    <span class="font-bold text-xl tracking-tight">FinTrack</span>
                 </div>
-                <div className="overflow-hidden">
-                  <p className="text-sm font-medium truncate">{user?.displayName || 'User'}</p>
-                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                <div id="auth-section" class="flex items-center gap-4">
+                    <!-- Injected via JS -->
                 </div>
-              </div>
-              <button
-                onClick={logOut}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium"
-              >
-                <LogOut size={16} />
-                Sign Out
-              </button>
             </div>
-          </aside>
-
-          {/* Main Content */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-background h-[calc(100vh-64px)] md:h-screen">
-            <div className="max-w-6xl mx-auto space-y-6 pb-20 md:pb-0">
-              {children}
-            </div>
-          </main>
         </div>
-      );
-    };
+    </nav>
 
-    /***********************************************************
-     * PAGES
-     ***********************************************************/
-
-    const Dashboard = () => {
-      const { transactions, addTransaction, updateTransaction, deleteTransaction, settings, bills } = useFinance();
-      const [showModal, setShowModal] = useState(false);
-      const [aiAdvice, setAiAdvice] = useState('');
-      const [loadingAi, setLoadingAi] = useState(false);
-      
-      // Current Month Data
-      const now = new Date();
-      const currentMonth = now.getMonth();
-      const currentYear = now.getFullYear();
-
-      const monthlyTransactions = useMemo(() => {
-        return transactions.filter(t => {
-          const d = new Date(t.date);
-          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-        });
-      }, [transactions, currentMonth, currentYear]);
-
-      const totalIncome = monthlyTransactions
-        .filter(t => t.type === TransactionType.INCOME)
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const totalExpenses = monthlyTransactions
-        .filter(t => t.type === TransactionType.EXPENSE || t.type === TransactionType.BILL_PAYMENT)
-        .reduce((sum, t) => sum + t.amount, 0);
-
-      const netCash = totalIncome - totalExpenses;
-
-      // Expenses Breakdown for Chart
-      const expensesByCategory = useMemo(() => {
-        const data = {};
-        monthlyTransactions
-          .filter(t => t.type === TransactionType.EXPENSE || t.type === TransactionType.BILL_PAYMENT)
-          .forEach(t => {
-            const cat = t.category || 'Uncategorized';
-            data[cat] = (data[cat] || 0) + t.amount;
-          });
-        return Object.entries(data).map(([name, value]) => ({ name, value }));
-      }, [monthlyTransactions]);
-
-      const COLORS = ['#3b82f6', '#8b5cf6', '#ef4444', '#f59e0b', '#10b981', '#ec4899'];
-
-      // State for new manual expense
-      const [newExpense, setNewExpense] = useState({
-        description: '',
-        amount: '',
-        category: 'General',
-        date: new Date().toISOString().split('T')[0]
-      });
-      const [editingId, setEditingId] = useState(null);
-
-      const handleSaveExpense = async (e) => {
-        e.preventDefault();
-        if (!newExpense.description || !newExpense.amount) return;
-
-        const payload = {
-          description: newExpense.description,
-          amount: parseFloat(newExpense.amount),
-          category: newExpense.category,
-          date: newExpense.date,
-          type: TransactionType.EXPENSE,
-        };
-
-        if (editingId) {
-          await updateTransaction(editingId, payload);
-          setEditingId(null);
-        } else {
-          await addTransaction(payload);
-        }
+    <!-- Main Content Area -->
+    <main id="app-container" class="flex-grow max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 hidden">
         
-        setNewExpense({ description: '', amount: '', category: 'General', date: new Date().toISOString().split('T')[0] });
-        setShowModal(false);
-      };
+        <!-- Tabs -->
+        <div class="flex space-x-1 bg-gray-900/50 p-1 rounded-xl mb-8 w-full max-w-md mx-auto border border-gray-800">
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="tab-btn flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all duration-200 text-brand-500 bg-gray-800 shadow-sm">Dashboard</button>
+            <button onclick="switchTab('bills')" id="tab-bills" class="tab-btn flex-1 py-2 px-4 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 transition-all duration-200">Recurring Bills</button>
+            <button onclick="switchTab('forecast')" id="tab-forecast" class="tab-btn flex-1 py-2 px-4 rounded-lg text-sm font-medium text-gray-400 hover:text-gray-200 transition-all duration-200">Forecast</button>
+        </div>
 
-      const handleEdit = (t) => {
-        setNewExpense({
-          description: t.description,
-          amount: t.amount.toString(),
-          category: t.category || 'General',
-          date: t.date
-        });
-        setEditingId(t.id);
-        setShowModal(true);
-      };
-
-      const handleGetAdvice = async () => {
-        setLoadingAi(true);
-        const advice = await analyzeFinances(settings, bills, transactions);
-        setAiAdvice(advice);
-        setLoadingAi(false);
-      };
-
-      return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          {/* Top Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
-              <p className="text-gray-400 text-sm font-medium uppercase">Net Cash (This Month)</p>
-              <h2 className={`text-3xl font-bold mt-2 ${netCash >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                ${netCash.toFixed(2)}
-              </h2>
-            </div>
-            <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
-              <p className="text-gray-400 text-sm font-medium uppercase">Total Expenses</p>
-              <h2 className="text-3xl font-bold mt-2 text-red-400">
-                ${totalExpenses.toFixed(2)}
-              </h2>
-            </div>
-            <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
-              <p className="text-gray-400 text-sm font-medium uppercase">Total Income</p>
-              <h2 className="text-3xl font-bold mt-2 text-blue-400">
-                ${totalIncome.toFixed(2)}
-              </h2>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Unplanned Expenses List */}
-            <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-lg font-bold text-white">Unplanned Expenses & Activity</h3>
-                <button 
-                  onClick={() => { setEditingId(null); setShowModal(true); }}
-                  className="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition"
-                >
-                  <Plus size={16} /> Add Expense
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="text-gray-400 text-sm border-b border-gray-700">
-                      <th className="py-3 font-medium">Date</th>
-                      <th className="py-3 font-medium">Description</th>
-                      <th className="py-3 font-medium">Category</th>
-                      <th className="py-3 font-medium text-right">Amount</th>
-                      <th className="py-3 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-sm text-gray-300">
-                    {monthlyTransactions.length === 0 ? (
-                      <tr><td colSpan={5} className="py-4 text-center text-gray-500">No transactions this month.</td></tr>
-                    ) : (
-                      monthlyTransactions.map((t) => (
-                        <tr key={t.id} className="border-b border-gray-700/50 hover:bg-gray-700/20 group">
-                          <td className="py-3">{t.date}</td>
-                          <td className="py-3 font-medium text-white">{t.description}</td>
-                          <td className="py-3">
-                            <span className="px-2 py-1 rounded-full bg-gray-700 text-xs text-gray-300">
-                              {t.category || (t.type === TransactionType.BILL_PAYMENT ? 'Bill' : 'General')}
-                            </span>
-                          </td>
-                          <td className={`py-3 text-right font-bold ${t.type === TransactionType.INCOME ? 'text-green-400' : 'text-white'}`}>
-                            {t.type === TransactionType.INCOME ? '+' : '-'}${t.amount.toFixed(2)}
-                          </td>
-                          <td className="py-3 text-right">
-                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={() => handleEdit(t)} className="p-1 hover:text-blue-400"><Edit2 size={14} /></button>
-                              <button onClick={() => deleteTransaction(t.id)} className="p-1 hover:text-red-400"><Trash2 size={14} /></button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Charts & AI */}
-            <div className="space-y-6">
-              {/* Chart */}
-              <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg min-h-[300px]">
-                <h3 className="text-lg font-bold text-white mb-4">Expense Breakdown</h3>
-                {expensesByCategory.length > 0 ? (
-                  <ResponsiveContainer width="100%" height={250}>
-                    <PieChart>
-                      <Pie
-                        data={expensesByCategory}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={80}
-                        paddingAngle={5}
-                        dataKey="value"
-                      >
-                        {expensesByCategory.map((entry, index) => (
-                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip 
-                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#374151', color: '#fff' }}
-                        itemStyle={{ color: '#fff' }}
-                      />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-gray-500">No data to display</div>
-                )}
-              </div>
-
-              {/* AI Advisor */}
-              <div className="bg-gradient-to-br from-indigo-900 to-surface p-6 rounded-xl border border-indigo-700/50 shadow-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    <Sparkles size={18} className="text-yellow-400" /> AI Insights
-                  </h3>
-                  <button 
-                    onClick={handleGetAdvice}
-                    disabled={loadingAi}
-                    className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-full disabled:opacity-50"
-                  >
-                    {loadingAi ? 'Thinking...' : 'Analyze'}
-                  </button>
+        <!-- View: Dashboard -->
+        <div id="view-dashboard" class="view-section space-y-6 animate-fade-in">
+            <!-- Summary Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fa-solid fa-sack-dollar text-4xl text-green-400"></i>
+                    </div>
+                    <p class="text-gray-400 text-sm font-medium">Net Cash (This Month)</p>
+                    <h3 class="text-3xl font-bold text-white mt-2" id="dash-net-cash">$0.00</h3>
+                    <p class="text-xs text-gray-500 mt-2">Income Received - Expenses Paid</p>
                 </div>
-                <p className="text-sm text-gray-300 leading-relaxed">
-                  {aiAdvice || "Click analyze to get AI-powered insights on your spending habits and budget."}
-                </p>
-              </div>
-            </div>
-          </div>
 
-          {/* Manual Expense Modal */}
-          {showModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-surface w-full max-w-md rounded-xl border border-gray-700 shadow-2xl p-6">
-                <h3 className="text-xl font-bold mb-4">{editingId ? 'Edit Transaction' : 'Add Manual Expense'}</h3>
-                <form onSubmit={handleSaveExpense} className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Description</label>
-                    <input 
-                      type="text" 
-                      value={newExpense.description}
-                      onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
-                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">Amount</label>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        value={newExpense.amount}
-                        onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
-                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                        required
-                      />
+                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fa-solid fa-arrow-trend-down text-4xl text-red-400"></i>
                     </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">Category</label>
-                      <select 
-                        value={newExpense.category}
-                        onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
-                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                      >
-                        <option>General</option>
-                        <option>Food</option>
-                        <option>Transport</option>
-                        <option>Shopping</option>
-                        <option>Entertainment</option>
-                        <option>Health</option>
-                        <option>Income (Adjustment)</option>
-                      </select>
+                    <p class="text-gray-400 text-sm font-medium">Total Expenses Paid</p>
+                    <h3 class="text-3xl font-bold text-white mt-2" id="dash-total-paid">$0.00</h3>
+                    <p class="text-xs text-gray-500 mt-2">Includes Bills & Manual</p>
+                </div>
+                
+                <div class="glass-panel rounded-2xl p-6 relative overflow-hidden group">
+                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                        <i class="fa-solid fa-clock text-4xl text-yellow-400"></i>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Date</label>
-                    <input 
-                      type="date" 
-                      value={newExpense.date}
-                      onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
-                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                      required
-                    />
-                  </div>
-                  <div className="flex justify-end gap-3 mt-6">
-                    <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-400 hover:text-white">Cancel</button>
-                    <button type="submit" className="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-lg font-medium">
-                      {editingId ? 'Update' : 'Add Expense'}
+                    <p class="text-gray-400 text-sm font-medium">Pending Bills</p>
+                    <h3 class="text-3xl font-bold text-white mt-2" id="dash-pending-bills">0</h3>
+                    <p class="text-xs text-gray-500 mt-2">Due this month</p>
+                </div>
+            </div>
+
+            <!-- Manual Expenses Section -->
+            <div class="glass-panel rounded-2xl border border-gray-800 p-6">
+                <div class="flex justify-between items-center mb-6">
+                    <h2 class="text-lg font-semibold flex items-center gap-2">
+                        <i class="fa-solid fa-receipt text-gray-400"></i> Unplanned / Manual Expenses
+                    </h2>
+                    <button onclick="openExpenseModal()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors border border-gray-700 flex items-center gap-2">
+                        <i class="fa-solid fa-plus"></i> Add Expense
                     </button>
-                  </div>
-                </form>
-              </div>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-gray-400">
+                        <thead class="bg-gray-900/50 uppercase text-xs font-semibold text-gray-500">
+                            <tr>
+                                <th class="px-4 py-3 rounded-l-lg">Date</th>
+                                <th class="px-4 py-3">Description</th>
+                                <th class="px-4 py-3 text-right">Amount</th>
+                                <th class="px-4 py-3 text-center rounded-r-lg">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="manual-expenses-list" class="divide-y divide-gray-800">
+                            <!-- Populated by JS -->
+                            <tr><td colspan="4" class="text-center py-4 text-gray-600">Loading expenses...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-          )}
         </div>
-      );
-    };
 
-    const Bills = () => {
-      const { bills, addBill, updateBill, deleteBill, transactions, addTransaction, deleteTransaction } = useFinance();
-      const [isModalOpen, setIsModalOpen] = useState(false);
-      const [editingBillId, setEditingBillId] = useState(null);
-      const [formData, setFormData] = useState({
-        name: '',
-        amount: 0,
-        dueDay: 1,
-        frequency: Frequency.MONTHLY,
-        terminationDate: ''
-      });
+        <!-- View: Recurring Bills -->
+        <div id="view-bills" class="view-section hidden space-y-6">
+            <div class="flex justify-between items-center">
+                <div class="space-y-1">
+                    <h2 class="text-2xl font-bold">Recurring Bills</h2>
+                    <p class="text-gray-400 text-sm">Manage your fixed monthly or semi-monthly obligations.</p>
+                </div>
+                <button onclick="openBillModal()" class="bg-brand-600 hover:bg-brand-500 text-white px-5 py-2.5 rounded-lg font-medium shadow-lg shadow-brand-500/20 transition-all flex items-center gap-2">
+                    <i class="fa-solid fa-plus"></i> Add Bill
+                </button>
+            </div>
 
-      // Current viewing month
-      const [viewDate, setViewDate] = useState(new Date());
-      const currentMonth = viewDate.getMonth();
-      const currentYear = viewDate.getFullYear();
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4" id="bills-list">
+                <!-- Populated by JS -->
+            </div>
+        </div>
 
-      // Helper: Check if a bill is paid for the current viewing month
-      const getBillPaymentStatus = (bill) => {
-        const payment = transactions.find(t => {
-          const tDate = new Date(t.date);
-          return (
-            t.relatedBillId === bill.id &&
-            t.type === TransactionType.BILL_PAYMENT &&
-            tDate.getMonth() === currentMonth &&
-            tDate.getFullYear() === currentYear
-          );
-        });
-        return payment;
-      };
+        <!-- View: Forecast -->
+        <div id="view-forecast" class="view-section hidden space-y-6">
+            <div class="glass-panel p-4 rounded-xl flex flex-col md:flex-row justify-between items-center gap-4 border border-gray-800">
+                <div class="flex items-center gap-3">
+                    <div class="p-3 bg-gray-800 rounded-lg text-brand-400">
+                        <i class="fa-solid fa-sliders"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold text-white">Budget Settings</h3>
+                        <p class="text-xs text-gray-400">Net Monthly Income & Payout Dates</p>
+                    </div>
+                </div>
+                <button onclick="openSettingsModal()" class="text-sm bg-gray-800 hover:bg-gray-700 border border-gray-700 text-white px-4 py-2 rounded-lg transition-colors">
+                    Edit Settings
+                </button>
+            </div>
 
-      const handleMarkAsPaid = async (bill) => {
-        const existingPayment = getBillPaymentStatus(bill);
-        
-        if (existingPayment) {
-          if (window.confirm(`Unmark ${bill.name} as paid for this month?`)) {
-            await deleteTransaction(existingPayment.id);
-          }
-        } else {
-          const dueDay = Math.min(bill.dueDay, new Date(currentYear, currentMonth + 1, 0).getDate());
-          const payDate = new Date(currentYear, currentMonth, dueDay);
-          
-          await addTransaction({
-            type: TransactionType.BILL_PAYMENT,
-            amount: bill.amount,
-            date: payDate.toISOString().split('T')[0],
-            description: `Payment for ${bill.name}`,
-            relatedBillId: bill.id,
-            category: 'Bills'
-          });
-        }
-      };
+            <div class="grid grid-cols-1 xl:grid-cols-3 gap-6" id="forecast-container">
+                <!-- 3 Month Columns Injected Here -->
+            </div>
+        </div>
 
-      const handleSaveBill = async (e) => {
-        e.preventDefault();
-        if (!formData.name || !formData.amount) return;
+    </main>
 
-        const payload = {
-          name: formData.name,
-          amount: Number(formData.amount),
-          dueDay: Number(formData.dueDay),
-          frequency: formData.frequency,
-          terminationDate: formData.terminationDate || undefined
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-gray-950 flex items-center justify-center z-40">
+        <div class="text-center">
+            <div class="inline-block w-12 h-12 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <h2 class="text-xl font-semibold text-white">FinTrack</h2>
+            <p class="text-gray-500 text-sm mt-2">Loading your finances...</p>
+        </div>
+    </div>
+
+    <!-- Login Screen -->
+    <div id="login-screen" class="fixed inset-0 bg-gray-950 flex items-center justify-center z-50 hidden">
+        <div class="glass-panel p-8 rounded-2xl max-w-md w-full mx-4 text-center border border-gray-800 shadow-2xl">
+            <div class="w-16 h-16 bg-brand-900/30 rounded-2xl flex items-center justify-center mx-auto mb-6 text-brand-500">
+                <i class="fa-solid fa-wallet text-3xl"></i>
+            </div>
+            <h1 class="text-3xl font-bold mb-2">Welcome Back</h1>
+            <p class="text-gray-400 mb-8">Sign in to access your personal financial tracker and budget forecast.</p>
+            
+            <button id="btn-google-login" class="w-full bg-white text-gray-900 hover:bg-gray-100 font-semibold py-3 px-6 rounded-xl transition-all flex items-center justify-center gap-3 group">
+                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" class="w-5 h-5" alt="Google">
+                <span>Continue with Google</span>
+            </button>
+            <p class="text-xs text-gray-600 mt-6">Secure authentication powered by Firebase</p>
+        </div>
+    </div>
+
+    <!-- MODAL: Add/Edit Manual Expense -->
+    <div id="modal-expense" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md shadow-2xl transform transition-all">
+            <h3 class="text-xl font-bold mb-4 text-white">Expense Details</h3>
+            <input type="hidden" id="expense-id">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Description</label>
+                    <input type="text" id="expense-desc" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="e.g. Grocery run">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Amount</label>
+                        <input type="number" id="expense-amount" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Date</label>
+                        <input type="date" id="expense-date" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeModal('modal-expense')" class="flex-1 py-2.5 rounded-lg text-gray-300 hover:bg-gray-800 transition-colors">Cancel</button>
+                <button onclick="saveExpense()" class="flex-1 bg-brand-600 hover:bg-brand-500 text-white font-medium py-2.5 rounded-lg transition-colors shadow-lg shadow-brand-600/20">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Add/Edit Recurring Bill -->
+    <div id="modal-bill" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-white">Recurring Bill</h3>
+                <button id="btn-delete-bill" onclick="deleteBill()" class="text-red-400 text-xs hover:underline hidden">Delete</button>
+            </div>
+            <input type="hidden" id="bill-id">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Bill Name</label>
+                    <input type="text" id="bill-name" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="e.g. Internet">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Amount (Est.)</label>
+                        <input type="number" id="bill-amount" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="0.00">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Day of Month Due</label>
+                        <input type="number" id="bill-day" min="1" max="31" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none" placeholder="1-31">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Frequency</label>
+                        <select id="bill-freq" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                            <option value="monthly">Monthly</option>
+                            <!-- Semi-monthly logic handled by adding 2 bills or specific logic, keeping simple for now -->
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">Termination (Optional)</label>
+                        <input type="date" id="bill-end-date" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeModal('modal-bill')" class="flex-1 py-2.5 rounded-lg text-gray-300 hover:bg-gray-800 transition-colors">Cancel</button>
+                <button onclick="saveBill()" class="flex-1 bg-brand-600 hover:bg-brand-500 text-white font-medium py-2.5 rounded-lg transition-colors shadow-lg shadow-brand-600/20">Save Bill</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Settings (Income/Payout) -->
+    <div id="modal-settings" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl">
+            <h3 class="text-xl font-bold mb-4 text-white">Budget Settings</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Total Net Monthly Income</label>
+                    <input type="number" id="setting-income" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                </div>
+                <div class="bg-gray-800/50 p-3 rounded-lg text-xs text-gray-400">
+                    Income is split into two payouts (Semi-monthly).
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">1st Payout Day</label>
+                        <input type="number" id="setting-day1" min="1" max="31" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-gray-400 mb-1">2nd Payout Day</label>
+                        <input type="number" id="setting-day2" min="1" max="31" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                    </div>
+                </div>
+            </div>
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeModal('modal-settings')" class="flex-1 py-2.5 rounded-lg text-gray-300 hover:bg-gray-800 transition-colors">Cancel</button>
+                <button onclick="saveSettings()" class="flex-1 bg-brand-600 hover:bg-brand-500 text-white font-medium py-2.5 rounded-lg transition-colors">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: Edit Actual Payout / Bill Payment -->
+    <div id="modal-transaction" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
+        <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-sm shadow-2xl">
+            <h3 class="text-xl font-bold mb-2 text-white" id="trans-modal-title">Confirm Transaction</h3>
+            <p class="text-sm text-gray-400 mb-4" id="trans-modal-desc">Adjust the actual amount if different from projected.</p>
+            
+            <input type="hidden" id="trans-ref-id">
+            <input type="hidden" id="trans-type"> <!-- 'income' or 'bill' -->
+            <input type="hidden" id="trans-date">
+            
+            <div class="mb-4">
+                <label class="block text-xs font-medium text-gray-400 mb-1">Actual Amount</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-2.5 text-gray-500">$</span>
+                    <input type="number" id="trans-amount" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-8 pr-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                </div>
+            </div>
+            
+            <div class="flex gap-3 mt-6">
+                <button onclick="closeModal('modal-transaction')" class="flex-1 py-2.5 rounded-lg text-gray-300 hover:bg-gray-800 transition-colors">Cancel</button>
+                <button onclick="confirmTransaction()" class="flex-1 bg-green-600 hover:bg-green-500 text-white font-medium py-2.5 rounded-lg transition-colors">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-analytics.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, onAuthStateChanged, signOut, signInWithCustomToken, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, addDoc, deleteDoc, onSnapshot, query, orderBy, where } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Configuration ---
+        const userFirebaseConfig = {
+            apiKey: "AIzaSyCWr-FADGeiUDxNokX0fdLubp-mnPZMhOM",
+            authDomain: "fintrack-42a39.firebaseapp.com",
+            databaseURL: "https://fintrack-42a39-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "fintrack-42a39",
+            storageBucket: "fintrack-42a39.firebasestorage.app",
+            messagingSenderId: "748412377392",
+            appId: "1:748412377392:web:918cc14cfcada4495fd0f5",
+            measurementId: "G-C0Y0G7C63V"
         };
 
-        if (editingBillId) {
-          await updateBill(editingBillId, payload);
-        } else {
-          await addBill(payload);
-        }
-        setIsModalOpen(false);
-        setEditingBillId(null);
-        setFormData({ name: '', amount: 0, dueDay: 1, frequency: Frequency.MONTHLY, terminationDate: '' });
-      };
+        const app = initializeApp(userFirebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const analytics = getAnalytics(app);
+        
+        // Use global variables provided by environment if available, otherwise default (Logic for Artifacts)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'fintrack-prod';
+        
+        // --- State Management ---
+        let currentUser = null;
+        let state = {
+            bills: [],
+            ledger: [],
+            manualExpenses: [],
+            settings: { income: 0, day1: 15, day2: 30 } // Defaults
+        };
+        let unsubscribers = [];
 
-      const startEdit = (bill) => {
-        setEditingBillId(bill.id);
-        setFormData(bill);
-        setIsModalOpen(true);
-      };
+        // --- Auth Logic ---
+        const provider = new GoogleAuthProvider();
+        const loginScreen = document.getElementById('login-screen');
+        const loadingScreen = document.getElementById('loading-screen');
+        const appContainer = document.getElementById('app-container');
+        const authSection = document.getElementById('auth-section');
 
-      const activeBills = bills.filter(b => !b.isArchived);
+        // Init Auth Flow
+        const initAuth = async () => {
+             // System Prompt Requirement: Try Custom Token First (for Preview Environment)
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                try {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } catch (e) {
+                    console.warn("Custom token failed, falling back to UI", e);
+                }
+            }
+            
+            // Auth Listener
+            onAuthStateChanged(auth, (user) => {
+                currentUser = user;
+                if (user) {
+                    loginScreen.classList.add('hidden');
+                    appContainer.classList.remove('hidden');
+                    updateAuthUI(user);
+                    initDataListeners(user.uid);
+                } else {
+                    loadingScreen.classList.add('hidden');
+                    loginScreen.classList.remove('hidden');
+                    appContainer.classList.add('hidden');
+                    authSection.innerHTML = '';
+                    cleanupListeners();
+                }
+            });
+        };
 
-      return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-            <div>
-              <h2 className="text-2xl font-bold text-white">Bills & Recurring Expenses</h2>
-              <div className="flex items-center gap-2 mt-2">
-                <button onClick={() => setViewDate(new Date(currentYear, currentMonth - 1, 1))} className="text-gray-400 hover:text-white">&lt;</button>
-                <span className="text-primary font-medium">
-                  {viewDate.toLocaleDateString('default', { month: 'long', year: 'numeric' })}
-                </span>
-                <button onClick={() => setViewDate(new Date(currentYear, currentMonth + 1, 1))} className="text-gray-400 hover:text-white">&gt;</button>
-              </div>
-            </div>
-            <button 
-              onClick={() => { setEditingBillId(null); setFormData({ name: '', amount: 0, dueDay: 1, frequency: Frequency.MONTHLY }); setIsModalOpen(true); }}
-              className="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
-            >
-              <Plus size={18} /> Add Bill
-            </button>
-          </div>
+        initAuth();
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {activeBills.map(bill => {
-              const payment = getBillPaymentStatus(bill);
-              const isPaid = !!payment;
-              
-              // Check if terminated
-              if (bill.terminationDate && new Date(bill.terminationDate) < new Date(currentYear, currentMonth, 1)) {
-                return null;
-              }
+        document.getElementById('btn-google-login').addEventListener('click', () => {
+            signInWithPopup(auth, provider).catch((error) => {
+                console.error("Login Failed:", error);
+                alert(`Login failed: ${error.message}. If you are in the preview environment, this is expected due to domain restrictions. Deployment to GitHub will work.`);
+                // Fallback for Preview ONLY if Google fails
+                if(window.location.hostname.includes("googleusercontent")) {
+                     signInAnonymously(auth);
+                }
+            });
+        });
 
-              return (
-                <div key={bill.id} className={`p-5 rounded-xl border transition-all ${isPaid ? 'bg-surface/50 border-green-500/30' : 'bg-surface border-gray-700'}`}>
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-bold text-lg text-white">{bill.name}</h3>
-                        <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300 uppercase">{bill.frequency}</span>
-                      </div>
-                      <p className="text-2xl font-bold text-gray-200">${bill.amount.toFixed(2)}</p>
-                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-400">
-                        <AlertCircle size={14} /> Due day: {bill.dueDay}
-                        {bill.terminationDate && <span className="text-red-400 ml-2">Ends: {bill.terminationDate}</span>}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col gap-2 items-end">
-                      <button
-                        onClick={() => handleMarkAsPaid(bill)}
-                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
-                          isPaid 
-                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
-                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
-                        }`}
-                      >
-                        <CheckCircle size={16} /> {isPaid ? 'Paid' : 'Mark Paid'}
-                      </button>
-                      <div className="flex gap-1 mt-2">
-                        <button onClick={() => startEdit(bill)} className="p-2 text-gray-500 hover:text-blue-400"><Edit2 size={16} /></button>
-                        <button onClick={() => deleteBill(bill.id)} className="p-2 text-gray-500 hover:text-red-400"><Trash2 size={16} /></button>
-                      </div>
-                    </div>
-                  </div>
+        function updateAuthUI(user) {
+            authSection.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <img src="${user.photoURL || 'https://ui-avatars.com/api/?name=User'}" class="w-8 h-8 rounded-full border border-gray-700">
+                    <span class="hidden md:inline text-sm font-medium text-gray-300">${user.displayName || 'User'}</span>
+                    <button id="btn-logout" class="text-xs bg-gray-800 hover:bg-red-900/50 text-gray-400 hover:text-red-400 px-3 py-1.5 rounded-lg transition-colors ml-2">
+                        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+                    </button>
                 </div>
-              );
-            })}
-            {activeBills.length === 0 && (
-              <div className="col-span-full text-center py-10 text-gray-500 bg-surface/30 rounded-xl border border-dashed border-gray-700">
-                No recurring bills set up.
-              </div>
-            )}
-          </div>
-
-          {/* Modal */}
-          {isModalOpen && (
-            <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-              <div className="bg-surface w-full max-w-md rounded-xl border border-gray-600 shadow-2xl p-6">
-                <h3 className="text-xl font-bold mb-4">{editingBillId ? 'Edit Bill' : 'Add New Bill'}</h3>
-                <form onSubmit={handleSaveBill} className="space-y-4">
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Bill Name</label>
-                    <input 
-                      type="text" 
-                      required
-                      value={formData.name}
-                      onChange={e => setFormData({...formData, name: e.target.value})}
-                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">Amount</label>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        required
-                        value={formData.amount}
-                        onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})}
-                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm text-gray-400 mb-1">Due Day (1-31)</label>
-                      <input 
-                        type="number" 
-                        min="1" max="31"
-                        required
-                        value={formData.dueDay}
-                        onChange={e => setFormData({...formData, dueDay: parseInt(e.target.value)})}
-                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Frequency</label>
-                    <select
-                      value={formData.frequency}
-                      onChange={e => setFormData({...formData, frequency: e.target.value})}
-                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                    >
-                      <option value={Frequency.MONTHLY}>Monthly</option>
-                      <option value={Frequency.SEMI_MONTHLY}>Semi-Monthly</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm text-gray-400 mb-1">Termination Date (Optional)</label>
-                    <input 
-                      type="date"
-                      value={formData.terminationDate || ''}
-                      onChange={e => setFormData({...formData, terminationDate: e.target.value})}
-                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
-                    />
-                  </div>
-                  <div className="flex justify-end gap-3 mt-6">
-                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-400 hover:text-white">Cancel</button>
-                    <button type="submit" className="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-lg font-medium">Save</button>
-                  </div>
-                </form>
-              </div>
-            </div>
-          )}
-        </div>
-      );
-    };
-
-    const Forecast = () => {
-      const { settings, updateSettings, bills, transactions, addTransaction, updateTransaction } = useFinance();
-      const [showSettings, setShowSettings] = useState(false);
-      const [tempSettings, setTempSettings] = useState(settings);
-
-      // Sync temp settings when global settings load
-      useEffect(() => {
-        setTempSettings(settings);
-      }, [settings]);
-
-      // Generate Forecast Data for next 3 months
-      const generateForecast = () => {
-        const result = {};
-        const now = new Date();
-
-        // Loop for current month + 2 future months
-        for (let i = 0; i < 3; i++) {
-          const targetDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
-          const monthKey = targetDate.toLocaleString('default', { month: 'long', year: 'numeric' });
-          const items = [];
-          const monthIndex = targetDate.getMonth();
-          const year = targetDate.getFullYear();
-
-          // 1. Income Projections (Semi-monthly split)
-          const incomePerPaycheck = settings.monthlyIncome / 2;
-          const payDays = [settings.payDate1, settings.payDate2];
-          
-          payDays.forEach((day, idx) => {
-            // Correct day validation
-            const validDay = Math.min(day, new Date(year, monthIndex + 1, 0).getDate());
-            const dateStr = new Date(year, monthIndex, validDay).toISOString().split('T')[0];
-            
-            // Check if actual income exists for this approximate date
-            const relatedId = `income-${year}-${monthIndex}-${idx}`; // Virtual ID for linking
-            const actualTx = transactions.find(t => 
-                t.type === TransactionType.INCOME && 
-                t.category === 'Salary' && 
-                t.date === dateStr 
-            );
-
-            if (actualTx) {
-                items.push({
-                    date: dateStr,
-                    description: `Salary Payout #${idx + 1} (Received)`,
-                    amount: actualTx.amount,
-                    type: TransactionType.INCOME,
-                    isActual: true,
-                    id: actualTx.id,
-                    relatedId
-                });
-            } else {
-                items.push({
-                    date: dateStr,
-                    description: `Salary Payout #${idx + 1} (Estimated)`,
-                    amount: incomePerPaycheck,
-                    type: TransactionType.INCOME,
-                    isActual: false,
-                    relatedId
-                });
-            }
-          });
-
-          // 2. Bill Projections
-          bills.forEach(bill => {
-            if (bill.terminationDate && new Date(bill.terminationDate) < targetDate) return;
-
-            const dueDay = Math.min(bill.dueDay, new Date(year, monthIndex + 1, 0).getDate());
-            const dateStr = new Date(year, monthIndex, dueDay).toISOString().split('T')[0];
-            
-            // Check actual payment
-            const actualTx = transactions.find(t => 
-                t.relatedBillId === bill.id && 
-                t.type === TransactionType.BILL_PAYMENT &&
-                new Date(t.date).getMonth() === monthIndex &&
-                new Date(t.date).getFullYear() === year
-            );
-
-            if (actualTx) {
-                items.push({
-                    date: actualTx.date,
-                    description: `${bill.name} (Paid)`,
-                    amount: actualTx.amount,
-                    type: TransactionType.BILL_PAYMENT,
-                    isActual: true,
-                    id: actualTx.id,
-                    relatedId: bill.id
-                });
-            } else {
-                items.push({
-                    date: dateStr,
-                    description: `${bill.name} (Due)`,
-                    amount: bill.amount,
-                    type: TransactionType.BILL_PAYMENT,
-                    isActual: false,
-                    relatedId: bill.id
-                });
-            }
-          });
-
-          // Sort by date
-          items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-          result[monthKey] = items;
+            `;
+            document.getElementById('btn-logout').addEventListener('click', () => signOut(auth));
         }
-        return result;
-      };
 
-      const forecastData = generateForecast();
+        // --- Data Listeners (Firestore) ---
+        function initDataListeners(userId) {
+            loadingScreen.classList.remove('hidden');
+            
+            // Paths based on System Instructions
+            const billsRef = collection(db, 'artifacts', appId, 'users', userId, 'bills');
+            const ledgerRef = collection(db, 'artifacts', appId, 'users', userId, 'ledger');
+            const settingsRef = collection(db, 'artifacts', appId, 'users', userId, 'settings');
 
-      // Handle Marking Income as Received or Editing Actual Amount
-      const handleIncomeAction = async (item, newAmount) => {
-        if (item.type !== TransactionType.INCOME) return;
+            // 1. Settings
+            const unsubSettings = onSnapshot(settingsRef, (snapshot) => {
+                if(!snapshot.empty) {
+                    const data = snapshot.docs[0].data();
+                    state.settings = { ...state.settings, ...data, id: snapshot.docs[0].id };
+                }
+                refreshUI();
+            }, (err) => console.error(err));
 
-        if (item.isActual && item.id) {
-            // Update existing
-            await updateTransaction(item.id, { amount: newAmount || item.amount });
-        } else {
-            // Create new
-            await addTransaction({
-                type: TransactionType.INCOME,
-                amount: newAmount || item.amount,
-                date: item.date,
-                description: item.description.replace('(Estimated)', '(Received)'),
-                category: 'Salary'
+            // 2. Bills
+            const unsubBills = onSnapshot(billsRef, (snapshot) => {
+                state.bills = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                refreshUI();
+            }, (err) => console.error(err));
+
+            // 3. Ledger (Transactions)
+            const unsubLedger = onSnapshot(ledgerRef, (snapshot) => {
+                state.ledger = snapshot.docs.map(d => ({id: d.id, ...d.data()}));
+                state.manualExpenses = state.ledger.filter(l => l.type === 'manual');
+                refreshUI();
+                loadingScreen.classList.add('hidden');
+            }, (err) => console.error(err));
+
+            unsubscribers.push(unsubSettings, unsubBills, unsubLedger);
+        }
+
+        function cleanupListeners() {
+            unsubscribers.forEach(u => u());
+            unsubscribers = [];
+        }
+
+        // --- Core Logic & Rendering ---
+
+        function refreshUI() {
+            renderDashboard();
+            renderBills();
+            renderForecast();
+        }
+
+        // 1. Dashboard Logic
+        window.renderDashboard = function() {
+            const today = new Date();
+            const currentMonthStr = today.toISOString().slice(0, 7); // YYYY-MM
+
+            // Filter Ledger for current Month
+            const monthTransactions = state.ledger.filter(t => t.date.startsWith(currentMonthStr));
+            
+            const incomeReceived = monthTransactions
+                .filter(t => t.type === 'income')
+                .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+            const expensesPaid = monthTransactions
+                .filter(t => (t.type === 'manual' || (t.type === 'bill' && t.isPaid)))
+                .reduce((sum, t) => sum + (parseFloat(t.amount) || 0), 0);
+
+            // Calculate Pending Bills
+            const billsDue = state.bills.filter(b => {
+                // Check if paid in ledger
+                const isPaid = state.ledger.some(l => l.refId === b.id && l.date.startsWith(currentMonthStr) && l.isPaid);
+                return !isPaid; // Simple logic: if not in ledger as paid, it's pending
+            }).length;
+
+            // Update Summary Cards
+            document.getElementById('dash-net-cash').innerText = formatCurrency(incomeReceived - expensesPaid);
+            document.getElementById('dash-total-paid').innerText = formatCurrency(expensesPaid);
+            document.getElementById('dash-pending-bills').innerText = billsDue;
+
+            // Render Manual Expenses List
+            const listEl = document.getElementById('manual-expenses-list');
+            const manualList = state.manualExpenses.sort((a,b) => new Date(b.date) - new Date(a.date));
+            
+            if(manualList.length === 0) {
+                listEl.innerHTML = `<tr><td colspan="4" class="text-center py-8 text-gray-600">No manual expenses recorded.</td></tr>`;
+            } else {
+                listEl.innerHTML = manualList.map(ex => `
+                    <tr class="hover:bg-gray-900/50 transition-colors group">
+                        <td class="px-4 py-3 font-mono text-xs text-gray-500">${ex.date}</td>
+                        <td class="px-4 py-3 text-white">${ex.description}</td>
+                        <td class="px-4 py-3 text-right font-medium text-red-400">-${formatCurrency(ex.amount)}</td>
+                        <td class="px-4 py-3 text-center">
+                            <button onclick="deleteTransaction('${ex.id}')" class="text-gray-600 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // 2. Bills Logic
+        window.renderBills = function() {
+            const listEl = document.getElementById('bills-list');
+            if (state.bills.length === 0) {
+                listEl.innerHTML = `<div class="col-span-full text-center py-10 text-gray-500 border border-dashed border-gray-800 rounded-xl">No recurring bills set up yet.</div>`;
+                return;
+            }
+
+            listEl.innerHTML = state.bills.map(bill => `
+                <div class="glass-panel p-5 rounded-xl border border-gray-800 flex justify-between items-start group hover:border-gray-700 transition-colors">
+                    <div>
+                        <h4 class="font-bold text-white text-lg">${bill.name}</h4>
+                        <div class="flex items-center gap-3 mt-2">
+                            <span class="text-xs bg-gray-800 text-gray-400 px-2 py-1 rounded uppercase font-medium tracking-wider">${bill.frequency}</span>
+                            <span class="text-xs text-gray-500"><i class="fa-regular fa-calendar mr-1"></i> Due day: ${bill.dueDay}</span>
+                        </div>
+                        ${bill.endDate ? `<p class="text-xs text-orange-400 mt-2">Ends: ${bill.endDate}</p>` : ''}
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xl font-bold text-gray-200">${formatCurrency(bill.amount)}</p>
+                        <button onclick="editBill('${bill.id}')" class="mt-2 text-xs text-brand-500 hover:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity">Edit</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 3. Forecast Logic (The Complex Part)
+        window.renderForecast = function() {
+            const container = document.getElementById('forecast-container');
+            container.innerHTML = '';
+            
+            const months = getNext3Months();
+            const payoutPerCycle = state.settings.income / 2;
+
+            months.forEach(monthObj => {
+                const monthStr = monthObj.iso; // YYYY-MM
+                const monthName = monthObj.label;
+
+                // Generate Forecast Items
+                let items = [];
+
+                // A. Income (2 Payouts)
+                [state.settings.day1, state.settings.day2].forEach((day, idx) => {
+                    const idBase = `income_${monthStr}_${idx}`;
+                    // Check Ledger
+                    const existing = state.ledger.find(l => l.refId === idBase && l.type === 'income');
+                    const isReceived = !!existing;
+                    const amt = isReceived ? existing.amount : payoutPerCycle;
+
+                    items.push({
+                        id: idBase,
+                        type: 'income',
+                        title: `Payout #${idx + 1}`,
+                        amount: amt,
+                        day: day,
+                        date: `${monthStr}-${String(day).padStart(2,'0')}`,
+                        isCompleted: isReceived,
+                        status: isReceived ? 'Received' : 'Pending'
+                    });
+                });
+
+                // B. Bills
+                state.bills.forEach(bill => {
+                    // Check termination
+                    if (bill.endDate && new Date(bill.endDate) < new Date(`${monthStr}-01`)) return;
+
+                    const idBase = `bill_${bill.id}_${monthStr}`;
+                    // Check Ledger
+                    const existing = state.ledger.find(l => l.refId === bill.id && l.date.startsWith(monthStr) && l.isPaid);
+                    const isPaid = !!existing;
+                    const amt = isPaid ? existing.amount : bill.amount;
+
+                    items.push({
+                        id: idBase, // Virtual ID
+                        realId: bill.id, // Real Bill ID
+                        type: 'bill',
+                        title: bill.name,
+                        amount: amt,
+                        day: bill.dueDay,
+                        date: `${monthStr}-${String(bill.dueDay).padStart(2,'0')}`,
+                        isCompleted: isPaid,
+                        status: isPaid ? 'Paid' : 'Due'
+                    });
+                });
+
+                // Sort by day
+                items.sort((a, b) => a.day - b.day);
+
+                // Calculate projected balance impact for this month (Simple View)
+                const totalIn = items.filter(i => i.type === 'income').reduce((s, i) => s + parseFloat(i.amount), 0);
+                const totalOut = items.filter(i => i.type === 'bill').reduce((s, i) => s + parseFloat(i.amount), 0);
+                const net = totalIn - totalOut;
+
+                // Render Card
+                const html = `
+                    <div class="glass-panel rounded-2xl border border-gray-800 flex flex-col h-full">
+                        <div class="p-5 border-b border-gray-800 bg-gray-900/30">
+                            <div class="flex justify-between items-center mb-1">
+                                <h4 class="font-bold text-lg text-white">${monthName}</h4>
+                                <span class="text-xs font-mono ${net >= 0 ? 'text-green-400' : 'text-red-400'}">${net >= 0 ? '+' : ''}${formatCurrency(net)}</span>
+                            </div>
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>In: ${formatCurrency(totalIn)}</span>
+                                <span>Out: ${formatCurrency(totalOut)}</span>
+                            </div>
+                        </div>
+                        <div class="flex-1 p-2 overflow-y-auto space-y-1 max-h-[400px]">
+                            ${items.map(item => `
+                                <div class="flex items-center justify-between p-3 rounded-lg ${item.isCompleted ? 'opacity-50 bg-gray-900' : 'bg-gray-800/50 hover:bg-gray-800'} transition-all cursor-pointer" onclick="triggerTransaction('${item.type}', '${item.realId || item.id}', '${item.date}', ${item.amount}, '${item.title}', ${item.isCompleted})">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-2 h-2 rounded-full ${item.type === 'income' ? 'bg-green-500' : 'bg-red-500'}"></div>
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-200">${item.title}</p>
+                                            <p class="text-[10px] text-gray-500">${item.date} • ${item.status}</p>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <span class="block text-sm font-medium ${item.type === 'income' ? 'text-green-400' : 'text-red-400'}">
+                                            ${item.type === 'bill' ? '-' : ''}${formatCurrency(item.amount)}
+                                        </span>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+                container.innerHTML += html;
             });
         }
-      };
 
-      const [editingIncomeId, setEditingIncomeId] = useState(null);
-      const [editAmount, setEditAmount] = useState('');
+        // --- Transaction Handling (Mark as Paid/Received) ---
+        window.triggerTransaction = function(type, refId, date, currentAmount, title, isCompleted) {
+            if (isCompleted) {
+                // Ideally allow editing completed, but for now let's toggle off or alert
+                if(confirm("This item is already marked as complete. Do you want to un-mark it?")) {
+                    // Find the ledger entry and delete it
+                    const entry = state.ledger.find(l => 
+                        (l.refId === refId && l.date === date) || 
+                        (type === 'bill' && l.refId === refId && l.date.startsWith(date.slice(0,7)))
+                    );
+                    if(entry) deleteTransaction(entry.id);
+                }
+                return;
+            }
 
-      const startEditIncome = (item) => {
-        setEditingIncomeId(item.relatedId || null);
-        setEditAmount(item.amount.toString());
-      };
+            // Open Modal
+            document.getElementById('trans-modal-title').innerText = type === 'income' ? 'Receive Income' : 'Pay Bill';
+            document.getElementById('trans-modal-desc').innerText = `Confirming: ${title}`;
+            document.getElementById('trans-type').value = type;
+            document.getElementById('trans-ref-id').value = refId;
+            document.getElementById('trans-date').value = date;
+            document.getElementById('trans-amount').value = currentAmount;
+            
+            openModal('modal-transaction');
+        }
 
-      const saveIncomeEdit = async (item) => {
-        const val = parseFloat(editAmount);
-        if (isNaN(val)) return;
-        await handleIncomeAction(item, val);
-        setEditingIncomeId(null);
-      };
+        window.confirmTransaction = async function() {
+            const type = document.getElementById('trans-type').value;
+            const refId = document.getElementById('trans-ref-id').value;
+            const date = document.getElementById('trans-date').value;
+            const amount = parseFloat(document.getElementById('trans-amount').value);
 
-      const saveSettings = async () => {
-        await updateSettings(tempSettings);
-        setShowSettings(false);
-      };
+            if (!amount) return alert("Enter valid amount");
 
-      return (
-        <div className="space-y-6 animate-in fade-in duration-500">
-          <div className="flex justify-between items-center bg-surface p-6 rounded-xl border border-gray-700">
-            <div>
-              <h2 className="text-2xl font-bold text-white">3-Month Forecast Budget</h2>
-              <p className="text-gray-400 text-sm">Projected cash flow based on recurring income and bills.</p>
-            </div>
-            <button 
-              onClick={() => setShowSettings(!showSettings)}
-              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition"
-            >
-              <Settings size={18} /> {showSettings ? 'Close Settings' : 'Income Settings'}
-            </button>
-          </div>
+            try {
+                const payload = {
+                    type: type, // 'income' or 'bill'
+                    amount: amount,
+                    date: date,
+                    isPaid: true, // for bills
+                    isReceived: true, // for income
+                    refId: refId, // Links back to bill ID or income slot ID
+                    createdAt: new Date().toISOString()
+                };
 
-          {showSettings && (
-            <div className="bg-surface p-6 rounded-xl border border-blue-500/50 shadow-lg animate-in fade-in slide-in-from-top-4">
-              <h3 className="font-bold mb-4 text-blue-400">Income Configuration</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">Total Monthly Income</label>
-                  <input 
-                    type="number" 
-                    value={tempSettings.monthlyIncome}
-                    onChange={e => setTempSettings({...tempSettings, monthlyIncome: parseFloat(e.target.value)})}
-                    className="w-full bg-background border border-gray-600 rounded-lg p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">1st Payout Date</label>
-                  <input 
-                    type="number" min="1" max="31"
-                    value={tempSettings.payDate1}
-                    onChange={e => setTempSettings({...tempSettings, payDate1: parseInt(e.target.value)})}
-                    className="w-full bg-background border border-gray-600 rounded-lg p-2"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-400 mb-1">2nd Payout Date</label>
-                  <input 
-                    type="number" min="1" max="31"
-                    value={tempSettings.payDate2}
-                    onChange={e => setTempSettings({...tempSettings, payDate2: parseInt(e.target.value)})}
-                    className="w-full bg-background border border-gray-600 rounded-lg p-2"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end mt-4">
-                <button onClick={saveSettings} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg">
-                  <Save size={16} /> Save Settings
-                </button>
-              </div>
-            </div>
-          )}
+                // Using addDoc since we might pay multiple times or want history
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), payload);
+                closeModal('modal-transaction');
+            } catch (e) {
+                console.error(e);
+                alert("Error saving transaction");
+            }
+        }
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-            {Object.entries(forecastData).map(([month, items]) => {
-              // Calculate projected totals for this month
-              const projectedIncome = items.filter(i => i.type === TransactionType.INCOME).reduce((acc, i) => acc + i.amount, 0);
-              const projectedExpense = items.filter(i => i.type !== TransactionType.INCOME).reduce((acc, i) => acc + i.amount, 0);
-              const surplus = projectedIncome - projectedExpense;
+        // --- CRUD Operations ---
 
-              return (
-                <div key={month} className="bg-surface rounded-xl border border-gray-700 overflow-hidden flex flex-col">
-                  <div className="p-4 bg-gray-800 border-b border-gray-700">
-                    <h3 className="text-lg font-bold text-center text-white">{month}</h3>
-                    <div className="flex justify-between mt-2 text-xs font-medium px-2">
-                       <span className="text-green-400">In: ${projectedIncome.toFixed(0)}</span>
-                       <span className={`${surplus >= 0 ? 'text-blue-400' : 'text-red-400'}`}>Net: ${surplus.toFixed(0)}</span>
-                       <span className="text-red-400">Out: ${projectedExpense.toFixed(0)}</span>
-                    </div>
-                  </div>
-                  <div className="flex-1 p-0 overflow-y-auto max-h-[500px]">
-                    <table className="w-full text-sm">
-                      <tbody>
-                        {items.map((item, idx) => (
-                          <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/20">
-                            <td className="p-3 w-12 text-gray-500 font-mono text-xs">
-                                {new Date(item.date).getDate()}
-                            </td>
-                            <td className="p-3">
-                                <div className="font-medium text-gray-200">{item.description}</div>
-                                <div className="text-xs text-gray-500 capitalize">{item.type.replace('_', ' ')}</div>
-                            </td>
-                            <td className="p-3 text-right">
-                                {editingIncomeId === item.relatedId ? (
-                                    <div className="flex items-center gap-1 justify-end">
-                                        <input 
-                                            type="number" 
-                                            className="w-20 bg-background border border-gray-600 rounded px-1 text-right"
-                                            value={editAmount}
-                                            onChange={e => setEditAmount(e.target.value)}
-                                            autoFocus
-                                        />
-                                        <button onClick={() => saveIncomeEdit(item)} className="text-green-400"><Check size={16}/></button>
-                                    </div>
-                                ) : (
-                                    <div className="flex items-center justify-end gap-2">
-                                        <span className={`font-bold ${item.type === TransactionType.INCOME ? 'text-green-400' : 'text-white'}`}>
-                                            {item.type === TransactionType.INCOME ? '+' : '-'}${item.amount.toFixed(2)}
-                                        </span>
-                                        {item.type === TransactionType.INCOME && (
-                                            <button onClick={() => startEditIncome(item)} className="text-gray-500 hover:text-blue-400">
-                                                <Edit2 size={12} />
-                                            </button>
-                                        )}
-                                    </div>
-                                )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      );
-    };
+        // Manual Expense
+        window.openExpenseModal = () => openModal('modal-expense');
+        
+        window.saveExpense = async function() {
+            const desc = document.getElementById('expense-desc').value;
+            const amount = document.getElementById('expense-amount').value;
+            const date = document.getElementById('expense-date').value || new Date().toISOString().split('T')[0];
 
-    /***********************************************************
-     * APP ROUTING
-     ***********************************************************/
-    
-    const PrivateRoute = ({ children }) => {
-      const { user, loading } = useAuth();
+            if (!desc || !amount) return alert("Please fill all fields");
 
-      if (loading) {
-        return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-blue-500">Loading Auth...</div>;
-      }
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
+                    type: 'manual',
+                    description: desc,
+                    amount: parseFloat(amount),
+                    date: date,
+                    createdAt: new Date().toISOString()
+                });
+                closeModal('modal-expense');
+                document.getElementById('expense-desc').value = '';
+                document.getElementById('expense-amount').value = '';
+            } catch (e) {
+                console.error(e);
+                alert("Error saving expense");
+            }
+        }
 
-      if (!user) {
-        return <Navigate to="/login" />;
-      }
+        window.deleteTransaction = async function(id) {
+            if(!confirm("Delete this record?")) return;
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger', id));
+        }
 
-      return <Layout>{children}</Layout>;
-    };
+        // Bills
+        window.openBillModal = () => {
+            document.getElementById('bill-id').value = '';
+            document.getElementById('bill-name').value = '';
+            document.getElementById('bill-amount').value = '';
+            document.getElementById('bill-day').value = '';
+            document.getElementById('bill-end-date').value = '';
+            document.getElementById('btn-delete-bill').classList.add('hidden');
+            openModal('modal-bill');
+        }
 
-    const Login = () => {
-      const { user, loading } = useAuth();
-      
-      if (loading) return null;
-      if (user) return <Navigate to="/" />;
+        window.editBill = (id) => {
+            const bill = state.bills.find(b => b.id === id);
+            if(!bill) return;
+            document.getElementById('bill-id').value = bill.id;
+            document.getElementById('bill-name').value = bill.name;
+            document.getElementById('bill-amount').value = bill.amount;
+            document.getElementById('bill-day').value = bill.dueDay;
+            document.getElementById('bill-end-date').value = bill.endDate || '';
+            document.getElementById('btn-delete-bill').classList.remove('hidden');
+            openModal('modal-bill');
+        }
 
-      return (
-        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4 animate-in fade-in zoom-in duration-500">
-          <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 text-center">
-            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Wallet className="text-blue-500" size={32} />
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-2">FinTrack AI</h1>
-            <p className="text-slate-400 mb-8">Master your money with intelligent tracking and forecasting.</p>
-            <button 
-              onClick={signInWithGoogle}
-              className="w-full bg-white text-slate-900 font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"
-            >
-              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-6 h-6" alt="Google" />
-              Sign in with Google
-            </button>
-          </div>
-        </div>
-      );
-    };
+        window.saveBill = async function() {
+            const id = document.getElementById('bill-id').value;
+            const data = {
+                name: document.getElementById('bill-name').value,
+                amount: parseFloat(document.getElementById('bill-amount').value),
+                dueDay: parseInt(document.getElementById('bill-day').value),
+                endDate: document.getElementById('bill-end-date').value,
+                frequency: document.getElementById('bill-freq').value
+            };
 
-    const App = () => {
-      return (
-        <AuthProvider>
-          <FinanceProvider>
-            <HashRouter>
-              <Routes>
-                <Route path="/login" element={<Login />} />
-                <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
-                <Route path="/bills" element={<PrivateRoute><Bills /></PrivateRoute>} />
-                <Route path="/forecast" element={<PrivateRoute><Forecast /></PrivateRoute>} />
-              </Routes>
-            </HashRouter>
-          </FinanceProvider>
-        </AuthProvider>
-      );
-    };
+            if (!data.name || !data.amount || !data.dueDay) return alert("Fill required fields");
 
-    const rootElement = document.getElementById('root');
-    if (!rootElement) {
-      throw new Error("Could not find root element to mount to");
-    }
+            const ref = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'bills');
+            try {
+                if(id) {
+                    await setDoc(doc(ref, id), data, { merge: true });
+                } else {
+                    await addDoc(ref, data);
+                }
+                closeModal('modal-bill');
+            } catch (e) { console.error(e); alert("Error saving bill"); }
+        }
 
-    const root = createRoot(rootElement);
-    root.render(<App />);
-    
-    // Remove loader safely
-    const loader = document.getElementById('loading-screen');
-    if (loader) loader.style.display = 'none';
-  </script>
+        window.deleteBill = async function() {
+            const id = document.getElementById('bill-id').value;
+            if(!id || !confirm("Delete this recurring bill?")) return;
+            await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', id));
+            closeModal('modal-bill');
+        }
+
+        // Settings
+        window.openSettingsModal = () => {
+            document.getElementById('setting-income').value = state.settings.income;
+            document.getElementById('setting-day1').value = state.settings.day1;
+            document.getElementById('setting-day2').value = state.settings.day2;
+            openModal('modal-settings');
+        }
+
+        window.saveSettings = async function() {
+            const data = {
+                income: parseFloat(document.getElementById('setting-income').value) || 0,
+                day1: parseInt(document.getElementById('setting-day1').value) || 15,
+                day2: parseInt(document.getElementById('setting-day2').value) || 30
+            };
+
+            const ref = collection(db, 'artifacts', appId, 'users', currentUser.uid, 'settings');
+            try {
+                // Assume single settings doc or overwrite with fixed ID if preferred. using add/update logic
+                if(state.settings.id) {
+                    await setDoc(doc(ref, state.settings.id), data, { merge: true });
+                } else {
+                    await addDoc(ref, data);
+                }
+                closeModal('modal-settings');
+            } catch(e) { console.error(e); }
+        }
+
+
+        // --- Utilities ---
+
+        window.switchTab = function(tabId) {
+            document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`view-${tabId}`).classList.remove('hidden');
+            
+            // Update Tab styles
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('text-brand-500', 'bg-gray-800', 'shadow-sm');
+                btn.classList.add('text-gray-400');
+            });
+            const activeBtn = document.getElementById(`tab-${tabId}`);
+            activeBtn.classList.remove('text-gray-400');
+            activeBtn.classList.add('text-brand-500', 'bg-gray-800', 'shadow-sm');
+            
+            if(tabId === 'forecast') renderForecast();
+        }
+
+        window.openModal = (id) => {
+            const el = document.getElementById(id);
+            el.classList.remove('hidden');
+            el.classList.add('flex');
+        }
+        window.closeModal = (id) => {
+            const el = document.getElementById(id);
+            el.classList.add('hidden');
+            el.classList.remove('flex');
+        }
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+        }
+
+        function getNext3Months() {
+            const result = [];
+            const today = new Date();
+            // Adjust date to 1st to avoid end-of-month skipping issues
+            let current = new Date(today.getFullYear(), today.getMonth(), 1);
+
+            for(let i=0; i<3; i++) {
+                const iso = current.toISOString().slice(0, 7);
+                const label = current.toLocaleString('default', { month: 'long', year: 'numeric' });
+                result.push({ iso, label });
+                current.setMonth(current.getMonth() + 1);
+            }
+            return result;
+        }
+
+        // --- Init ---
+        window.switchTab('dashboard');
+
+    </script>
 </body>
 </html>
