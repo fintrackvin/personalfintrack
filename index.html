@@ -587,7 +587,8 @@
                     // Append Total if End Date exists
                     if(bill.endDate) {
                          const end = new Date(bill.endDate);
-                         const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+                         // FIXED: Added + 1 to make months inclusive
+                         const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
                          counterStr += ` of ${totalMonths}`;
                      }
                 } else if (bill.frequency === 'one-time') {
@@ -598,19 +599,13 @@
                 let actionsHtml = '';
                 
                 if (bill.frequency === 'semi-monthly') {
-                    // Two due dates
-                    // Need to handle if paid on ANY date in this month that matches refId
-                    // For matching, we check if we have 2 entries? Or match specifically close to due date?
-                    // To allow "Choose Date", we check how many times paid this month
                     const paymentsThisMonth = state.ledger.filter(l => l.refId === bill.id && l.date.startsWith(currentMonthStr) && l.isPaid);
                     
-                    // Sort payments by date
                     paymentsThisMonth.sort((a,b) => new Date(a.date) - new Date(b.date));
                     
                     const paid1 = paymentsThisMonth.length > 0 ? paymentsThisMonth[0] : null;
                     const paid2 = paymentsThisMonth.length > 1 ? paymentsThisMonth[1] : null;
 
-                    // Default Default dates for the picker (Due dates)
                     const defaultDate1 = `${currentMonthStr}-${String(bill.dueDay).padStart(2,'0')}`;
                     const defaultDate2 = `${currentMonthStr}-${String(bill.dueDay2).padStart(2,'0')}`;
 
@@ -627,7 +622,6 @@
                 } else {
                     // Monthly
                     const defaultDate = `${currentMonthStr}-${String(bill.dueDay).padStart(2,'0')}`;
-                    // Find if paid this month
                     const paid = state.ledger.find(l => l.refId === bill.id && l.date.startsWith(currentMonthStr) && l.isPaid);
                     actionsHtml = `<div class="mt-4">${renderBillBtn(bill, defaultDate, paid, 'Pay')}</div>`;
                 }
