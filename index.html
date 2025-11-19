@@ -1,790 +1,1256 @@
 <!DOCTYPE html>
 <html lang="en" class="dark">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>FinTrack - Personal Finance</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Babel for processing JSX in browser -->
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FinTrack AI</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            background: '#0f172a', // slate-900
+            surface: '#1e293b', // slate-800
+            primary: '#3b82f6', // blue-500
+            secondary: '#64748b', // slate-500
+            accent: '#8b5cf6', // violet-500
+            success: '#22c55e', // green-500
+            danger: '#ef4444', // red-500
+          }
+        }
+      }
+    }
+  </script>
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
-        
-        body {
-            font-family: 'Inter', sans-serif;
-            background-color: #09090b;
-            color: #fafafa;
-            overflow: hidden; /* Prevent double scrollbars */
-        }
-        
-        /* Technical Dot Grid Background */
-        .bg-dot-grid {
-            background-size: 40px 40px;
-            background-image: radial-gradient(circle, #3f3f46 1px, transparent 1px);
-        }
-        
-        /* Scrollbar styling */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #09090b; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #27272a; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #3f3f46; 
-        }
+  <!-- React & ReactDOM (UMD) -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  
+  <!-- Recharts (UMD) -->
+  <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
 
-        input[type="date"]::-webkit-calendar-picker-indicator {
-            filter: invert(1);
-            cursor: pointer;
-        }
-    </style>
+  <!-- Babel Standalone (for JSX/TSX) -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0f172a; }
+    ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #475569; }
+  </style>
 <script type="importmap">
 {
   "imports": {
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "@heroicons/react/": "https://aistudiocdn.com/@heroicons/react@^2.2.0/",
     "firebase/": "https://aistudiocdn.com/firebase@^12.6.0/",
-    "vite": "https://aistudiocdn.com/vite@^7.2.2",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "react-router-dom": "https://aistudiocdn.com/react-router-dom@^7.9.6",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1"
   }
 }
 </script>
 </head>
-<body>
-    <div id="root"></div>
+<body class="bg-background text-white antialiased min-h-screen">
+  <div id="root"></div>
 
-    <!-- MAIN APPLICATION SCRIPT -->
-    <script type="text/babel" data-type="module">
-        import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
-        import { createRoot } from 'https://esm.sh/react-dom@18.2.0/client';
+  <!-- Application Code -->
+  <script type="text/babel" data-type="module" data-presets="typescript,react">
+    /***********************************************************
+     * IMPORTS
+     ***********************************************************/
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getDatabase, ref, set, push, onValue, remove, update } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+    import { GoogleGenAI } from "https://esm.sh/@google/genai"; 
+    import { HashRouter, Routes, Route, Link, Navigate, useLocation } from "https://esm.sh/react-router-dom?external=react";
+    import { 
+      LayoutDashboard, Receipt, CalendarClock, LogOut, PieChart as IconPieChart, 
+      Plus, Trash2, Edit2, Sparkles, Wallet, CheckCircle, AlertCircle, Settings, Save, Check 
+    } from "https://esm.sh/lucide-react?external=react";
+
+    // Access React globals
+    const { useState, useEffect, useMemo, createContext, useContext } = React;
+    // Access Recharts globals
+    const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } = window.Recharts;
+
+    /***********************************************************
+     * CONFIGURATION & TYPES
+     ***********************************************************/
+    
+    // Shim process.env for API Key usage if you set it in your environment, 
+    // otherwise GenAI will use what's passed or fail gracefully.
+    // NOTE: In a real deployment, use secrets. For this demo, we assume the user might
+    // manually configure it or it's injected.
+    window.process = { env: { API_KEY: '' } }; 
+
+    // Firebase Config
+    const firebaseConfig = {
+      apiKey: "AIzaSyCWr-FADGeiUDxNokX0fdLubp-mnPZMhOM",
+      authDomain: "fintrack-42a39.firebaseapp.com",
+      databaseURL: "https://fintrack-42a39-default-rtdb.asia-southeast1.firebasedatabase.app",
+      projectId: "fintrack-42a39",
+      storageBucket: "fintrack-42a39.firebasestorage.app",
+      messagingSenderId: "748412377392",
+      appId: "1:748412377392:web:918cc14cfcada4495fd0f5",
+      measurementId: "G-C0Y0G7C63V"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+    const googleProvider = new GoogleAuthProvider();
+
+    // Types
+    const TransactionType = {
+      INCOME: 'income',
+      EXPENSE: 'expense',
+      BILL_PAYMENT: 'bill_payment'
+    };
+
+    const Frequency = {
+      ONCE: 'once',
+      MONTHLY: 'monthly',
+      SEMI_MONTHLY: 'semi_monthly'
+    };
+
+    /***********************************************************
+     * SERVICES
+     ***********************************************************/
+    const signInWithGoogle = async () => {
+      try {
+        await signInWithPopup(auth, googleProvider);
+      } catch (error) {
+        console.error("Error signing in", error);
+      }
+    };
+
+    const logOut = async () => {
+      try {
+        await firebaseSignOut(auth);
+      } catch (error) {
+        console.error("Error signing out", error);
+      }
+    };
+
+    const analyzeFinances = async (settings, bills, transactions) => {
+      // NOTE: You can insert your API Key here for the demo if process.env is not set
+      const API_KEY = process.env.API_KEY || ''; 
+      
+      if (!API_KEY) return "API Key not configured in environment.";
+
+      const ai = new GoogleGenAI({ apiKey: API_KEY });
+
+      // Filter recent transactions (last 30 days)
+      const now = new Date();
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(now.getDate() - 30);
+
+      const recentTx = transactions.filter(t => new Date(t.date) >= thirtyDaysAgo);
+      
+      const prompt = `
+        You are a financial advisor. Here is the user's financial data for the last 30 days:
         
-        // HeroIcons Imports
-        import { 
-            HomeIcon, 
-            BanknotesIcon, 
-            ChartBarIcon, 
-            ArrowLeftStartOnRectangleIcon,
-            PlusIcon,
-            TrashIcon,
-            PencilIcon,
-            CreditCardIcon,
-            WalletIcon,
-            CheckCircleIcon,
-            CalendarDaysIcon,
-            Cog6ToothIcon,
-            ShieldCheckIcon
-        } from 'https://esm.sh/@heroicons/react@2.1.1/24/outline';
+        Monthly Base Income: ${settings.monthlyIncome}
+        Pay Dates: ${settings.payDate1}th and ${settings.payDate2}th
         
-        import { 
-            CheckCircleIcon as CheckCircleSolid 
-        } from 'https://esm.sh/@heroicons/react@2.1.1/24/solid';
+        Recurring Bills:
+        ${bills.map(b => `- ${b.name}: ${b.amount} (Due day: ${b.dueDay})`).join('\n')}
+        
+        Recent Transactions:
+        ${recentTx.map(t => `- ${t.date}: ${t.description} (${t.type}) - ${t.amount}`).join('\n')}
+        
+        Please provide a concise summary of their financial health, point out any excessive spending, and give 3 actionable tips to save money or improve their budget. Keep it under 200 words.
+      `;
 
-        // Firebase Imports
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
-        import { getAuth, GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, getDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+      try {
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+        });
+        return response.text || "Could not generate advice.";
+      } catch (error) {
+        console.error("Gemini Error:", error);
+        return "Sorry, I encountered an error analyzing your data. Please check your API Key.";
+      }
+    };
 
-        // --- FIREBASE CONFIGURATION ---
-        const firebaseConfig = {
-            apiKey: "AIzaSyCWr-FADGeiUDxNokX0fdLubp-mnPZMhOM",
-            authDomain: "fintrack-42a39.firebaseapp.com",
-            projectId: "fintrack-42a39",
-            storageBucket: "fintrack-42a39.firebasestorage.app",
-            messagingSenderId: "748412377392",
-            appId: "1:748412377392:web:918cc14cfcada4495fd0f5",
-            measurementId: "G-C0Y0G7C63V"
-        };
+    /***********************************************************
+     * CONTEXTS
+     ***********************************************************/
+    
+    // --- Auth Context ---
+    const AuthContext = createContext({ user: null, loading: true });
+    const useAuth = () => useContext(AuthContext);
 
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const googleProvider = new GoogleAuthProvider();
+    const AuthProvider = ({ children }) => {
+      const [user, setUser] = useState(null);
+      const [loading, setLoading] = useState(true);
 
-        // --- INITIAL STATE & TYPES ---
-        const INITIAL_STATE = {
-            income: {
-                semiMonthlyAmount: 0,
-                payoutDay1: 15,
-                payoutDay2: 30
-            },
-            fixedExpenses: [],
-            unplannedExpenses: [],
-            paidStatus: {}
-        };
+      useEffect(() => {
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+          setUser(currentUser);
+          setLoading(false);
+        });
+        return () => unsubscribe();
+      }, []);
 
-        // --- COMPONENTS ---
+      return (
+        <AuthContext.Provider value={{ user, loading }}>
+          {children}
+        </AuthContext.Provider>
+      );
+    };
 
-        // 1. Login Component
-        const Login = () => {
-            const [error, setError] = useState(null);
-            const [isLoggingIn, setIsLoggingIn] = useState(false);
+    // --- Finance Context ---
+    const defaultSettings = {
+      monthlyIncome: 0,
+      payDate1: 15,
+      payDate2: 30
+    };
 
-            const handleLogin = async () => {
-                setIsLoggingIn(true);
-                setError(null);
-                try {
-                    await signInWithPopup(auth, googleProvider);
-                } catch (err) {
-                    console.error(err);
-                    setError("Failed to sign in. Please try again.");
-                } finally {
-                    setIsLoggingIn(false);
-                }
-            };
+    const FinanceContext = createContext(undefined);
+    const useFinance = () => {
+      const context = useContext(FinanceContext);
+      if (!context) throw new Error("useFinance must be used within FinanceProvider");
+      return context;
+    };
 
-            return (
-                <div className="h-screen w-full bg-[#09090b] flex flex-col items-center justify-center relative overflow-hidden bg-dot-grid">
-                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-blue-500/10 rounded-full blur-[100px] pointer-events-none"></div>
-                    <div className="relative z-10 max-w-md w-full mx-4 p-8 bg-zinc-900/80 border border-zinc-800 backdrop-blur-xl rounded-2xl shadow-2xl flex flex-col items-center text-center">
-                        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-600/20">
-                            <ChartBarIcon className="w-8 h-8 text-white" />
-                        </div>
-                        <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">FinTracker</h1>
-                        <p className="text-zinc-400 mb-8 text-sm">Secure cloud-synced personal finance dashboard.</p>
-                        <button 
-                            onClick={handleLogin}
-                            disabled={isLoggingIn}
-                            className="w-full bg-white hover:bg-zinc-200 text-black font-semibold py-3 px-4 rounded-lg flex items-center justify-center gap-3 transition-all transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70"
-                        >
-                            {isLoggingIn ? (
-                                <div className="w-5 h-5 border-2 border-zinc-800 border-t-transparent rounded-full animate-spin"></div>
-                            ) : (
-                                <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google" className="w-5 h-5" />
-                            )}
-                            <span>{isLoggingIn ? 'Signing in...' : 'Continue with Google'}</span>
-                        </button>
-                        {error && (
-                            <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded text-red-400 text-xs">
-                                {error}
-                            </div>
-                        )}
-                        <div className="mt-8 flex items-center gap-2 text-[10px] text-zinc-600 uppercase tracking-wider font-medium">
-                            <ShieldCheckIcon className="w-3 h-3" />
-                            <span>Encrypted & Secure</span>
-                        </div>
-                    </div>
+    const FinanceProvider = ({ children }) => {
+      const { user } = useAuth();
+      const [settings, setSettings] = useState(defaultSettings);
+      const [bills, setBills] = useState([]);
+      const [transactions, setTransactions] = useState([]);
+      const [loadingData, setLoadingData] = useState(true);
+
+      useEffect(() => {
+        if (!user) {
+          setBills([]);
+          setTransactions([]);
+          setSettings(defaultSettings);
+          setLoadingData(false);
+          return;
+        }
+
+        const userRef = ref(db, `users/${user.uid}`);
+        
+        const unsubscribe = onValue(userRef, (snapshot) => {
+          const data = snapshot.val();
+          if (data) {
+            setSettings(data.settings || defaultSettings);
+            
+            const loadedBills = [];
+            if (data.bills) {
+              Object.entries(data.bills).forEach(([key, val]) => {
+                loadedBills.push({ ...val, id: key });
+              });
+            }
+            setBills(loadedBills);
+
+            const loadedTransactions = [];
+            if (data.transactions) {
+              Object.entries(data.transactions).forEach(([key, val]) => {
+                loadedTransactions.push({ ...val, id: key });
+              });
+            }
+            // Sort transactions by date descending
+            loadedTransactions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            setTransactions(loadedTransactions);
+          } else {
+            setSettings(defaultSettings);
+            setBills([]);
+            setTransactions([]);
+          }
+          setLoadingData(false);
+        });
+
+        return () => unsubscribe();
+      }, [user]);
+
+      const updateSettings = async (newSettings) => {
+        if (!user) return;
+        await set(ref(db, `users/${user.uid}/settings`), newSettings);
+      };
+
+      const addBill = async (bill) => {
+        if (!user) return;
+        const newBillRef = push(ref(db, `users/${user.uid}/bills`));
+        await set(newBillRef, bill);
+      };
+
+      const updateBill = async (id, bill) => {
+        if (!user) return;
+        await update(ref(db, `users/${user.uid}/bills/${id}`), bill);
+      };
+
+      const deleteBill = async (id) => {
+        if (!user) return;
+        await remove(ref(db, `users/${user.uid}/bills/${id}`));
+      };
+
+      const addTransaction = async (transaction) => {
+        if (!user) return;
+        const newTxRef = push(ref(db, `users/${user.uid}/transactions`));
+        await set(newTxRef, transaction);
+      };
+
+      const updateTransaction = async (id, transaction) => {
+        if (!user) return;
+        await update(ref(db, `users/${user.uid}/transactions/${id}`), transaction);
+      };
+
+      const deleteTransaction = async (id) => {
+        if (!user) return;
+        await remove(ref(db, `users/${user.uid}/transactions/${id}`));
+      };
+
+      return (
+        <FinanceContext.Provider value={{
+          settings, bills, transactions, updateSettings, addBill, updateBill, 
+          deleteBill, addTransaction, updateTransaction, deleteTransaction, loadingData
+        }}>
+          {children}
+        </FinanceContext.Provider>
+      );
+    };
+
+    /***********************************************************
+     * COMPONENTS
+     ***********************************************************/
+
+    const Layout = ({ children }) => {
+      const location = useLocation();
+      const { user } = useAuth();
+
+      const navItems = [
+        { path: '/', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { path: '/bills', label: 'Bills & Expenses', icon: <Receipt size={20} /> },
+        { path: '/forecast', label: '3-Month Forecast', icon: <CalendarClock size={20} /> },
+      ];
+
+      return (
+        <div className="flex flex-col md:flex-row min-h-screen text-gray-100">
+          {/* Sidebar */}
+          <aside className="w-full md:w-64 bg-surface border-b md:border-b-0 md:border-r border-gray-700 flex flex-col shrink-0">
+            <div className="p-6 flex items-center gap-2 border-b border-gray-700">
+              <IconPieChart className="text-primary" size={28} />
+              <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+                FinTrack AI
+              </h1>
+            </div>
+
+            <nav className="flex-1 p-4 space-y-2">
+              {navItems.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+                    location.pathname === item.path
+                      ? 'bg-primary/20 text-primary border border-primary/30'
+                      : 'hover:bg-gray-700 text-gray-300'
+                  }`}
+                >
+                  {item.icon}
+                  <span className="font-medium">{item.label}</span>
+                </Link>
+              ))}
+            </nav>
+
+            <div className="p-4 border-t border-gray-700">
+              <div className="flex items-center gap-3 mb-4 px-2">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-500 to-purple-500 flex items-center justify-center text-xs font-bold">
+                  {user?.displayName ? user.displayName.charAt(0) : 'U'}
                 </div>
-            );
+                <div className="overflow-hidden">
+                  <p className="text-sm font-medium truncate">{user?.displayName || 'User'}</p>
+                  <p className="text-xs text-gray-500 truncate">{user?.email}</p>
+                </div>
+              </div>
+              <button
+                onClick={logOut}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors text-sm font-medium"
+              >
+                <LogOut size={16} />
+                Sign Out
+              </button>
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 overflow-y-auto p-4 md:p-8 bg-background">
+            <div className="max-w-6xl mx-auto space-y-6">
+              {children}
+            </div>
+          </main>
+        </div>
+      );
+    };
+
+    /***********************************************************
+     * PAGES
+     ***********************************************************/
+
+    const Dashboard = () => {
+      const { transactions, addTransaction, updateTransaction, deleteTransaction, settings, bills } = useFinance();
+      const [showModal, setShowModal] = useState(false);
+      const [aiAdvice, setAiAdvice] = useState('');
+      const [loadingAi, setLoadingAi] = useState(false);
+      
+      // Current Month Data
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      const monthlyTransactions = useMemo(() => {
+        return transactions.filter(t => {
+          const d = new Date(t.date);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        });
+      }, [transactions, currentMonth, currentYear]);
+
+      const totalIncome = monthlyTransactions
+        .filter(t => t.type === TransactionType.INCOME)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const totalExpenses = monthlyTransactions
+        .filter(t => t.type === TransactionType.EXPENSE || t.type === TransactionType.BILL_PAYMENT)
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      const netCash = totalIncome - totalExpenses;
+
+      // Expenses Breakdown for Chart
+      const expensesByCategory = useMemo(() => {
+        const data = {};
+        monthlyTransactions
+          .filter(t => t.type === TransactionType.EXPENSE || t.type === TransactionType.BILL_PAYMENT)
+          .forEach(t => {
+            const cat = t.category || 'Uncategorized';
+            data[cat] = (data[cat] || 0) + t.amount;
+          });
+        return Object.entries(data).map(([name, value]) => ({ name, value }));
+      }, [monthlyTransactions]);
+
+      const COLORS = ['#3b82f6', '#8b5cf6', '#ef4444', '#f59e0b', '#10b981', '#ec4899'];
+
+      // State for new manual expense
+      const [newExpense, setNewExpense] = useState({
+        description: '',
+        amount: '',
+        category: 'General',
+        date: new Date().toISOString().split('T')[0]
+      });
+      const [editingId, setEditingId] = useState(null);
+
+      const handleSaveExpense = async (e) => {
+        e.preventDefault();
+        if (!newExpense.description || !newExpense.amount) return;
+
+        const payload = {
+          description: newExpense.description,
+          amount: parseFloat(newExpense.amount),
+          category: newExpense.category,
+          date: newExpense.date,
+          type: TransactionType.EXPENSE,
         };
 
-        // 2. Sidebar Component
-        const Sidebar = ({ activeView, onChangeView, user, onLogout }) => {
-            const menuItems = [
-                { id: 'dashboard', label: 'Dashboard', icon: HomeIcon },
-                { id: 'expenses', label: 'Bills & Expenses', icon: BanknotesIcon },
-                { id: 'forecast', label: '3-Month Forecast', icon: ChartBarIcon },
-            ];
+        if (editingId) {
+          await updateTransaction(editingId, payload);
+          setEditingId(null);
+        } else {
+          await addTransaction(payload);
+        }
+        
+        setNewExpense({ description: '', amount: '', category: 'General', date: new Date().toISOString().split('T')[0] });
+        setShowModal(false);
+      };
 
-            return (
-                <div className="w-full md:w-64 bg-[#0c0c0e] border-r border-zinc-800 flex-shrink-0 flex flex-col h-full z-50">
-                    <div className="p-6 border-b border-zinc-800">
-                        <h1 className="text-xl font-bold text-white tracking-tighter flex items-center gap-2">
-                            <div className="w-6 h-6 bg-blue-600 rounded-md flex items-center justify-center text-xs text-white">FT</div>
-                            FinTracker
-                        </h1>
-                    </div>
-                    <nav className="flex-1 p-4 space-y-1">
-                        {menuItems.map(item => (
-                            <button
-                                key={item.id}
-                                onClick={() => onChangeView(item.id)}
-                                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                                    activeView === item.id 
-                                    ? 'bg-blue-600/10 text-blue-400 border border-blue-600/20' 
-                                    : 'text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800/50'
-                                }`}
-                            >
-                                <item.icon className="w-5 h-5" />
-                                <span>{item.label}</span>
-                            </button>
+      const handleEdit = (t) => {
+        setNewExpense({
+          description: t.description,
+          amount: t.amount.toString(),
+          category: t.category || 'General',
+          date: t.date
+        });
+        setEditingId(t.id);
+        setShowModal(true);
+      };
+
+      const handleGetAdvice = async () => {
+        setLoadingAi(true);
+        const advice = await analyzeFinances(settings, bills, transactions);
+        setAiAdvice(advice);
+        setLoadingAi(false);
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Top Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
+              <p className="text-gray-400 text-sm font-medium uppercase">Net Cash (This Month)</p>
+              <h2 className={`text-3xl font-bold mt-2 ${netCash >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                ${netCash.toFixed(2)}
+              </h2>
+            </div>
+            <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
+              <p className="text-gray-400 text-sm font-medium uppercase">Total Expenses</p>
+              <h2 className="text-3xl font-bold mt-2 text-red-400">
+                ${totalExpenses.toFixed(2)}
+              </h2>
+            </div>
+            <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
+              <p className="text-gray-400 text-sm font-medium uppercase">Total Income</p>
+              <h2 className="text-3xl font-bold mt-2 text-blue-400">
+                ${totalIncome.toFixed(2)}
+              </h2>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Unplanned Expenses List */}
+            <div className="lg:col-span-2 bg-surface p-6 rounded-xl border border-gray-700 shadow-lg">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold text-white">Unplanned Expenses & Activity</h3>
+                <button 
+                  onClick={() => { setEditingId(null); setShowModal(true); }}
+                  className="flex items-center gap-2 bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg text-sm transition"
+                >
+                  <Plus size={16} /> Add Expense
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="text-gray-400 text-sm border-b border-gray-700">
+                      <th className="py-3 font-medium">Date</th>
+                      <th className="py-3 font-medium">Description</th>
+                      <th className="py-3 font-medium">Category</th>
+                      <th className="py-3 font-medium text-right">Amount</th>
+                      <th className="py-3 font-medium text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-sm text-gray-300">
+                    {monthlyTransactions.length === 0 ? (
+                      <tr><td colSpan={5} className="py-4 text-center text-gray-500">No transactions this month.</td></tr>
+                    ) : (
+                      monthlyTransactions.map((t) => (
+                        <tr key={t.id} className="border-b border-gray-700/50 hover:bg-gray-700/20 group">
+                          <td className="py-3">{t.date}</td>
+                          <td className="py-3 font-medium text-white">{t.description}</td>
+                          <td className="py-3">
+                            <span className="px-2 py-1 rounded-full bg-gray-700 text-xs text-gray-300">
+                              {t.category || (t.type === TransactionType.BILL_PAYMENT ? 'Bill' : 'General')}
+                            </span>
+                          </td>
+                          <td className={`py-3 text-right font-bold ${t.type === TransactionType.INCOME ? 'text-green-400' : 'text-white'}`}>
+                            {t.type === TransactionType.INCOME ? '+' : '-'}${t.amount.toFixed(2)}
+                          </td>
+                          <td className="py-3 text-right">
+                            <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => handleEdit(t)} className="p-1 hover:text-blue-400"><Edit2 size={14} /></button>
+                              <button onClick={() => deleteTransaction(t.id)} className="p-1 hover:text-red-400"><Trash2 size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Charts & AI */}
+            <div className="space-y-6">
+              {/* Chart */}
+              <div className="bg-surface p-6 rounded-xl border border-gray-700 shadow-lg min-h-[300px]">
+                <h3 className="text-lg font-bold text-white mb-4">Expense Breakdown</h3>
+                {expensesByCategory.length > 0 ? (
+                  <ResponsiveContainer width="100%" height={250}>
+                    <PieChart>
+                      <Pie
+                        data={expensesByCategory}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {expensesByCategory.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                         ))}
-                    </nav>
-                    <div className="p-4 border-t border-zinc-800">
-                        {user && (
-                            <div className="flex items-center gap-3 mb-4 px-2">
-                                {user.photoURL ? (
-                                    <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-zinc-700" />
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ backgroundColor: '#1e293b', borderColor: '#374151', color: '#fff' }}
+                        itemStyle={{ color: '#fff' }}
+                      />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-gray-500">No data to display</div>
+                )}
+              </div>
+
+              {/* AI Advisor */}
+              <div className="bg-gradient-to-br from-indigo-900 to-surface p-6 rounded-xl border border-indigo-700/50 shadow-lg">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    <Sparkles size={18} className="text-yellow-400" /> AI Insights
+                  </h3>
+                  <button 
+                    onClick={handleGetAdvice}
+                    disabled={loadingAi}
+                    className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1 rounded-full disabled:opacity-50"
+                  >
+                    {loadingAi ? 'Thinking...' : 'Analyze'}
+                  </button>
+                </div>
+                <p className="text-sm text-gray-300 leading-relaxed">
+                  {aiAdvice || "Click analyze to get AI-powered insights on your spending habits and budget."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Manual Expense Modal */}
+          {showModal && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+              <div className="bg-surface w-full max-w-md rounded-xl border border-gray-700 shadow-2xl p-6">
+                <h3 className="text-xl font-bold mb-4">{editingId ? 'Edit Transaction' : 'Add Manual Expense'}</h3>
+                <form onSubmit={handleSaveExpense} className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Description</label>
+                    <input 
+                      type="text" 
+                      value={newExpense.description}
+                      onChange={(e) => setNewExpense({...newExpense, description: e.target.value})}
+                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                      required
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Amount</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        value={newExpense.amount}
+                        onChange={(e) => setNewExpense({...newExpense, amount: e.target.value})}
+                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Category</label>
+                      <select 
+                        value={newExpense.category}
+                        onChange={(e) => setNewExpense({...newExpense, category: e.target.value})}
+                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                      >
+                        <option>General</option>
+                        <option>Food</option>
+                        <option>Transport</option>
+                        <option>Shopping</option>
+                        <option>Entertainment</option>
+                        <option>Health</option>
+                        <option>Income (Adjustment)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Date</label>
+                    <input 
+                      type="date" 
+                      value={newExpense.date}
+                      onChange={(e) => setNewExpense({...newExpense, date: e.target.value})}
+                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                      required
+                    />
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-gray-400 hover:text-white">Cancel</button>
+                    <button type="submit" className="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-lg font-medium">
+                      {editingId ? 'Update' : 'Add Expense'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const Bills = () => {
+      const { bills, addBill, updateBill, deleteBill, transactions, addTransaction, deleteTransaction } = useFinance();
+      const [isModalOpen, setIsModalOpen] = useState(false);
+      const [editingBillId, setEditingBillId] = useState(null);
+      const [formData, setFormData] = useState({
+        name: '',
+        amount: 0,
+        dueDay: 1,
+        frequency: Frequency.MONTHLY,
+        terminationDate: ''
+      });
+
+      // Current viewing month
+      const [viewDate, setViewDate] = useState(new Date());
+      const currentMonth = viewDate.getMonth();
+      const currentYear = viewDate.getFullYear();
+
+      // Helper: Check if a bill is paid for the current viewing month
+      const getBillPaymentStatus = (bill) => {
+        const payment = transactions.find(t => {
+          const tDate = new Date(t.date);
+          return (
+            t.relatedBillId === bill.id &&
+            t.type === TransactionType.BILL_PAYMENT &&
+            tDate.getMonth() === currentMonth &&
+            tDate.getFullYear() === currentYear
+          );
+        });
+        return payment;
+      };
+
+      const handleMarkAsPaid = async (bill) => {
+        const existingPayment = getBillPaymentStatus(bill);
+        
+        if (existingPayment) {
+          if (window.confirm(`Unmark ${bill.name} as paid for this month?`)) {
+            await deleteTransaction(existingPayment.id);
+          }
+        } else {
+          const dueDay = Math.min(bill.dueDay, new Date(currentYear, currentMonth + 1, 0).getDate());
+          const payDate = new Date(currentYear, currentMonth, dueDay);
+          
+          await addTransaction({
+            type: TransactionType.BILL_PAYMENT,
+            amount: bill.amount,
+            date: payDate.toISOString().split('T')[0],
+            description: `Payment for ${bill.name}`,
+            relatedBillId: bill.id,
+            category: 'Bills'
+          });
+        }
+      };
+
+      const handleSaveBill = async (e) => {
+        e.preventDefault();
+        if (!formData.name || !formData.amount) return;
+
+        const payload = {
+          name: formData.name,
+          amount: Number(formData.amount),
+          dueDay: Number(formData.dueDay),
+          frequency: formData.frequency,
+          terminationDate: formData.terminationDate || undefined
+        };
+
+        if (editingBillId) {
+          await updateBill(editingBillId, payload);
+        } else {
+          await addBill(payload);
+        }
+        setIsModalOpen(false);
+        setEditingBillId(null);
+        setFormData({ name: '', amount: 0, dueDay: 1, frequency: Frequency.MONTHLY, terminationDate: '' });
+      };
+
+      const startEdit = (bill) => {
+        setEditingBillId(bill.id);
+        setFormData(bill);
+        setIsModalOpen(true);
+      };
+
+      const activeBills = bills.filter(b => !b.isArchived);
+
+      return (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <div>
+              <h2 className="text-2xl font-bold text-white">Bills & Recurring Expenses</h2>
+              <div className="flex items-center gap-2 mt-2">
+                <button onClick={() => setViewDate(new Date(currentYear, currentMonth - 1, 1))} className="text-gray-400 hover:text-white">&lt;</button>
+                <span className="text-primary font-medium">
+                  {viewDate.toLocaleDateString('default', { month: 'long', year: 'numeric' })}
+                </span>
+                <button onClick={() => setViewDate(new Date(currentYear, currentMonth + 1, 1))} className="text-gray-400 hover:text-white">&gt;</button>
+              </div>
+            </div>
+            <button 
+              onClick={() => { setEditingBillId(null); setFormData({ name: '', amount: 0, dueDay: 1, frequency: Frequency.MONTHLY }); setIsModalOpen(true); }}
+              className="bg-primary hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
+            >
+              <Plus size={18} /> Add Bill
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {activeBills.map(bill => {
+              const payment = getBillPaymentStatus(bill);
+              const isPaid = !!payment;
+              
+              // Check if terminated
+              if (bill.terminationDate && new Date(bill.terminationDate) < new Date(currentYear, currentMonth, 1)) {
+                return null;
+              }
+
+              return (
+                <div key={bill.id} className={`p-5 rounded-xl border transition-all ${isPaid ? 'bg-surface/50 border-green-500/30' : 'bg-surface border-gray-700'}`}>
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-bold text-lg text-white">{bill.name}</h3>
+                        <span className="text-xs px-2 py-0.5 rounded bg-gray-700 text-gray-300 uppercase">{bill.frequency}</span>
+                      </div>
+                      <p className="text-2xl font-bold text-gray-200">${bill.amount.toFixed(2)}</p>
+                      <div className="flex items-center gap-2 mt-2 text-sm text-gray-400">
+                        <AlertCircle size={14} /> Due day: {bill.dueDay}
+                        {bill.terminationDate && <span className="text-red-400 ml-2">Ends: {bill.terminationDate}</span>}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 items-end">
+                      <button
+                        onClick={() => handleMarkAsPaid(bill)}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+                          isPaid 
+                            ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' 
+                            : 'bg-gray-700 text-gray-300 hover:bg-gray-600 hover:text-white'
+                        }`}
+                      >
+                        <CheckCircle size={16} /> {isPaid ? 'Paid' : 'Mark Paid'}
+                      </button>
+                      <div className="flex gap-1 mt-2">
+                        <button onClick={() => startEdit(bill)} className="p-2 text-gray-500 hover:text-blue-400"><Edit2 size={16} /></button>
+                        <button onClick={() => deleteBill(bill.id)} className="p-2 text-gray-500 hover:text-red-400"><Trash2 size={16} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {activeBills.length === 0 && (
+              <div className="col-span-full text-center py-10 text-gray-500 bg-surface/30 rounded-xl border border-dashed border-gray-700">
+                No recurring bills set up.
+              </div>
+            )}
+          </div>
+
+          {/* Modal */}
+          {isModalOpen && (
+            <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+              <div className="bg-surface w-full max-w-md rounded-xl border border-gray-600 shadow-2xl p-6">
+                <h3 className="text-xl font-bold mb-4">{editingBillId ? 'Edit Bill' : 'Add New Bill'}</h3>
+                <form onSubmit={handleSaveBill} className="space-y-4">
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Bill Name</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={formData.name}
+                      onChange={e => setFormData({...formData, name: e.target.value})}
+                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Amount</label>
+                      <input 
+                        type="number" 
+                        step="0.01"
+                        required
+                        value={formData.amount}
+                        onChange={e => setFormData({...formData, amount: parseFloat(e.target.value)})}
+                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-gray-400 mb-1">Due Day (1-31)</label>
+                      <input 
+                        type="number" 
+                        min="1" max="31"
+                        required
+                        value={formData.dueDay}
+                        onChange={e => setFormData({...formData, dueDay: parseInt(e.target.value)})}
+                        className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Frequency</label>
+                    <select
+                      value={formData.frequency}
+                      onChange={e => setFormData({...formData, frequency: e.target.value})}
+                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                    >
+                      <option value={Frequency.MONTHLY}>Monthly</option>
+                      <option value={Frequency.SEMI_MONTHLY}>Semi-Monthly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-400 mb-1">Termination Date (Optional)</label>
+                    <input 
+                      type="date"
+                      value={formData.terminationDate || ''}
+                      onChange={e => setFormData({...formData, terminationDate: e.target.value})}
+                      className="w-full bg-background border border-gray-600 rounded-lg p-2 text-white focus:border-primary outline-none"
+                    />
+                  </div>
+                  <div className="flex justify-end gap-3 mt-6">
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-gray-400 hover:text-white">Cancel</button>
+                    <button type="submit" className="px-4 py-2 bg-primary hover:bg-blue-600 text-white rounded-lg font-medium">Save</button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    const Forecast = () => {
+      const { settings, updateSettings, bills, transactions, addTransaction, updateTransaction } = useFinance();
+      const [showSettings, setShowSettings] = useState(false);
+      const [tempSettings, setTempSettings] = useState(settings);
+
+      // Sync temp settings when global settings load
+      useEffect(() => {
+        setTempSettings(settings);
+      }, [settings]);
+
+      // Generate Forecast Data for next 3 months
+      const generateForecast = () => {
+        const result = {};
+        const now = new Date();
+
+        // Loop for current month + 2 future months
+        for (let i = 0; i < 3; i++) {
+          const targetDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
+          const monthKey = targetDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+          const items = [];
+          const monthIndex = targetDate.getMonth();
+          const year = targetDate.getFullYear();
+
+          // 1. Income Projections (Semi-monthly split)
+          const incomePerPaycheck = settings.monthlyIncome / 2;
+          const payDays = [settings.payDate1, settings.payDate2];
+          
+          payDays.forEach((day, idx) => {
+            // Correct day validation
+            const validDay = Math.min(day, new Date(year, monthIndex + 1, 0).getDate());
+            const dateStr = new Date(year, monthIndex, validDay).toISOString().split('T')[0];
+            
+            // Check if actual income exists for this approximate date
+            const relatedId = `income-${year}-${monthIndex}-${idx}`; // Virtual ID for linking
+            const actualTx = transactions.find(t => 
+                t.type === TransactionType.INCOME && 
+                t.category === 'Salary' && 
+                t.date === dateStr 
+            );
+
+            if (actualTx) {
+                items.push({
+                    date: dateStr,
+                    description: `Salary Payout #${idx + 1} (Received)`,
+                    amount: actualTx.amount,
+                    type: TransactionType.INCOME,
+                    isActual: true,
+                    id: actualTx.id,
+                    relatedId
+                });
+            } else {
+                items.push({
+                    date: dateStr,
+                    description: `Salary Payout #${idx + 1} (Estimated)`,
+                    amount: incomePerPaycheck,
+                    type: TransactionType.INCOME,
+                    isActual: false,
+                    relatedId
+                });
+            }
+          });
+
+          // 2. Bill Projections
+          bills.forEach(bill => {
+            if (bill.terminationDate && new Date(bill.terminationDate) < targetDate) return;
+
+            const dueDay = Math.min(bill.dueDay, new Date(year, monthIndex + 1, 0).getDate());
+            const dateStr = new Date(year, monthIndex, dueDay).toISOString().split('T')[0];
+            
+            // Check actual payment
+            const actualTx = transactions.find(t => 
+                t.relatedBillId === bill.id && 
+                t.type === TransactionType.BILL_PAYMENT &&
+                new Date(t.date).getMonth() === monthIndex &&
+                new Date(t.date).getFullYear() === year
+            );
+
+            if (actualTx) {
+                items.push({
+                    date: actualTx.date,
+                    description: `${bill.name} (Paid)`,
+                    amount: actualTx.amount,
+                    type: TransactionType.BILL_PAYMENT,
+                    isActual: true,
+                    id: actualTx.id,
+                    relatedId: bill.id
+                });
+            } else {
+                items.push({
+                    date: dateStr,
+                    description: `${bill.name} (Due)`,
+                    amount: bill.amount,
+                    type: TransactionType.BILL_PAYMENT,
+                    isActual: false,
+                    relatedId: bill.id
+                });
+            }
+          });
+
+          // Sort by date
+          items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          result[monthKey] = items;
+        }
+        return result;
+      };
+
+      const forecastData = generateForecast();
+
+      // Handle Marking Income as Received or Editing Actual Amount
+      const handleIncomeAction = async (item, newAmount) => {
+        if (item.type !== TransactionType.INCOME) return;
+
+        if (item.isActual && item.id) {
+            // Update existing
+            await updateTransaction(item.id, { amount: newAmount || item.amount });
+        } else {
+            // Create new
+            await addTransaction({
+                type: TransactionType.INCOME,
+                amount: newAmount || item.amount,
+                date: item.date,
+                description: item.description.replace('(Estimated)', '(Received)'),
+                category: 'Salary'
+            });
+        }
+      };
+
+      const [editingIncomeId, setEditingIncomeId] = useState(null);
+      const [editAmount, setEditAmount] = useState('');
+
+      const startEditIncome = (item) => {
+        setEditingIncomeId(item.relatedId || null);
+        setEditAmount(item.amount.toString());
+      };
+
+      const saveIncomeEdit = async (item) => {
+        const val = parseFloat(editAmount);
+        if (isNaN(val)) return;
+        await handleIncomeAction(item, val);
+        setEditingIncomeId(null);
+      };
+
+      const saveSettings = async () => {
+        await updateSettings(tempSettings);
+        setShowSettings(false);
+      };
+
+      return (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center bg-surface p-6 rounded-xl border border-gray-700">
+            <div>
+              <h2 className="text-2xl font-bold text-white">3-Month Forecast Budget</h2>
+              <p className="text-gray-400 text-sm">Projected cash flow based on recurring income and bills.</p>
+            </div>
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className="flex items-center gap-2 bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition"
+            >
+              <Settings size={18} /> {showSettings ? 'Close Settings' : 'Income Settings'}
+            </button>
+          </div>
+
+          {showSettings && (
+            <div className="bg-surface p-6 rounded-xl border border-blue-500/50 shadow-lg animate-in fade-in slide-in-from-top-4">
+              <h3 className="font-bold mb-4 text-blue-400">Income Configuration</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">Total Monthly Income</label>
+                  <input 
+                    type="number" 
+                    value={tempSettings.monthlyIncome}
+                    onChange={e => setTempSettings({...tempSettings, monthlyIncome: parseFloat(e.target.value)})}
+                    className="w-full bg-background border border-gray-600 rounded-lg p-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">1st Payout Date</label>
+                  <input 
+                    type="number" min="1" max="31"
+                    value={tempSettings.payDate1}
+                    onChange={e => setTempSettings({...tempSettings, payDate1: parseInt(e.target.value)})}
+                    className="w-full bg-background border border-gray-600 rounded-lg p-2"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">2nd Payout Date</label>
+                  <input 
+                    type="number" min="1" max="31"
+                    value={tempSettings.payDate2}
+                    onChange={e => setTempSettings({...tempSettings, payDate2: parseInt(e.target.value)})}
+                    className="w-full bg-background border border-gray-600 rounded-lg p-2"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end mt-4">
+                <button onClick={saveSettings} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg">
+                  <Save size={16} /> Save Settings
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+            {Object.entries(forecastData).map(([month, items]) => {
+              // Calculate projected totals for this month
+              const projectedIncome = items.filter(i => i.type === TransactionType.INCOME).reduce((acc, i) => acc + i.amount, 0);
+              const projectedExpense = items.filter(i => i.type !== TransactionType.INCOME).reduce((acc, i) => acc + i.amount, 0);
+              const surplus = projectedIncome - projectedExpense;
+
+              return (
+                <div key={month} className="bg-surface rounded-xl border border-gray-700 overflow-hidden flex flex-col">
+                  <div className="p-4 bg-gray-800 border-b border-gray-700">
+                    <h3 className="text-lg font-bold text-center text-white">{month}</h3>
+                    <div className="flex justify-between mt-2 text-xs font-medium px-2">
+                       <span className="text-green-400">In: ${projectedIncome.toFixed(0)}</span>
+                       <span className={`${surplus >= 0 ? 'text-blue-400' : 'text-red-400'}`}>Net: ${surplus.toFixed(0)}</span>
+                       <span className="text-red-400">Out: ${projectedExpense.toFixed(0)}</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 p-0 overflow-y-auto max-h-[500px]">
+                    <table className="w-full text-sm">
+                      <tbody>
+                        {items.map((item, idx) => (
+                          <tr key={idx} className="border-b border-gray-700/50 hover:bg-gray-700/20">
+                            <td className="p-3 w-12 text-gray-500 font-mono text-xs">
+                                {new Date(item.date).getDate()}
+                            </td>
+                            <td className="p-3">
+                                <div className="font-medium text-gray-200">{item.description}</div>
+                                <div className="text-xs text-gray-500 capitalize">{item.type.replace('_', ' ')}</div>
+                            </td>
+                            <td className="p-3 text-right">
+                                {editingIncomeId === item.relatedId ? (
+                                    <div className="flex items-center gap-1 justify-end">
+                                        <input 
+                                            type="number" 
+                                            className="w-20 bg-background border border-gray-600 rounded px-1 text-right"
+                                            value={editAmount}
+                                            onChange={e => setEditAmount(e.target.value)}
+                                            autoFocus
+                                        />
+                                        <button onClick={() => saveIncomeEdit(item)} className="text-green-400"><Check size={16}/></button>
+                                    </div>
                                 ) : (
-                                    <div className="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 text-xs font-bold">
-                                        {user.displayName?.charAt(0) || 'U'}
+                                    <div className="flex items-center justify-end gap-2">
+                                        <span className={`font-bold ${item.type === TransactionType.INCOME ? 'text-green-400' : 'text-white'}`}>
+                                            {item.type === TransactionType.INCOME ? '+' : '-'}${item.amount.toFixed(2)}
+                                        </span>
+                                        {item.type === TransactionType.INCOME && (
+                                            <button onClick={() => startEditIncome(item)} className="text-gray-500 hover:text-blue-400">
+                                                <Edit2 size={12} />
+                                            </button>
+                                        )}
                                     </div>
                                 )}
-                                <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-medium text-white truncate">{user.displayName}</p>
-                                    <p className="text-xs text-zinc-500 truncate">{user.email}</p>
-                                </div>
-                            </div>
-                        )}
-                        <button 
-                            onClick={onLogout}
-                            className="w-full flex items-center justify-center gap-2 text-xs text-zinc-400 hover:text-red-400 hover:bg-red-400/10 py-2 rounded-md transition-colors"
-                        >
-                            <ArrowLeftStartOnRectangleIcon className="w-4 h-4" />
-                            Sign Out
-                        </button>
-                    </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-            );
-        };
+              );
+            })}
+          </div>
+        </div>
+      );
+    };
 
-        // 3. Dashboard Component
-        const Dashboard = ({ state, onAddUnplanned, onUpdateUnplanned, onDeleteUnplanned }) => {
-            const [isAdding, setIsAdding] = useState(false);
-            const [editingId, setEditingId] = useState(null);
-            const [formState, setFormState] = useState({ name: '', amount: '', date: new Date().toISOString().split('T')[0] });
+    /***********************************************************
+     * APP ROUTING
+     ***********************************************************/
+    
+    const PrivateRoute = ({ children }) => {
+      const { user, loading } = useAuth();
 
-            const currentDate = new Date();
-            const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-            
-            // Semi-monthly * 2 for monthly income
-            const monthlyIncome = (state.income.semiMonthlyAmount || 0) * 2;
-            
-            const currentMonthUnplanned = state.unplannedExpenses.filter(e => e.date.startsWith(currentMonthKey));
-            const totalUnplanned = currentMonthUnplanned.reduce((acc, curr) => acc + curr.amount, 0);
+      if (loading) {
+        return <div className="min-h-screen flex items-center justify-center bg-slate-900 text-blue-500">Loading...</div>;
+      }
 
-            const totalPaidFixed = state.fixedExpenses.reduce((acc, expense) => {
-                const key = `${expense.id}_${currentMonthKey}`;
-                if (state.paidStatus[key]) {
-                    return acc + expense.amount;
-                }
-                return acc;
-            }, 0);
+      if (!user) {
+        return <Navigate to="/login" />;
+      }
 
-            const totalPaid = totalUnplanned + totalPaidFixed;
-            const netCash = monthlyIncome - totalPaid;
-            
-            const totalFixedProjected = state.fixedExpenses.reduce((acc, expense) => {
-                if (expense.terminationDate && expense.terminationDate < currentMonthKey + '-01') return acc;
-                return acc + (expense.frequency === 'semi-monthly' ? expense.amount * 2 : expense.amount);
-            }, 0);
+      return <Layout>{children}</Layout>;
+    };
 
-            const handleSubmit = (e) => {
-                e.preventDefault();
-                if (editingId) {
-                    onUpdateUnplanned({ 
-                        id: editingId, 
-                        name: formState.name, 
-                        amount: parseFloat(formState.amount), 
-                        date: formState.date 
-                    });
-                    setEditingId(null);
-                } else {
-                    onAddUnplanned({ 
-                        name: formState.name, 
-                        amount: parseFloat(formState.amount), 
-                        date: formState.date 
-                    });
-                }
-                setIsAdding(false);
-                setFormState({ name: '', amount: '', date: new Date().toISOString().split('T')[0] });
-            };
+    const Login = () => {
+      const { user, loading } = useAuth();
+      
+      if (loading) return null;
+      if (user) return <Navigate to="/" />;
 
-            const startEdit = (item) => {
-                setFormState({ name: item.name, amount: item.amount.toString(), date: item.date });
-                setEditingId(item.id);
-                setIsAdding(true);
-            };
+      return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+          <div className="bg-slate-800 p-8 rounded-2xl shadow-2xl max-w-md w-full border border-slate-700 text-center">
+            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Wallet className="text-blue-500" size={32} />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">FinTrack AI</h1>
+            <p className="text-slate-400 mb-8">Master your money with intelligent tracking and forecasting.</p>
+            <button 
+              onClick={signInWithGoogle}
+              className="w-full bg-white text-slate-900 font-bold py-3 px-4 rounded-lg flex items-center justify-center gap-3 hover:bg-gray-100 transition-colors"
+            >
+              <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-6 h-6" alt="Google" />
+              Sign in with Google
+            </button>
+          </div>
+        </div>
+      );
+    };
 
-            return (
-                <div className="space-y-6 animate-in fade-in duration-500">
-                    <header>
-                        <h2 className="text-2xl font-bold text-white tracking-tight">Dashboard</h2>
-                        <p className="text-zinc-400 text-sm">Overview for {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}</p>
-                    </header>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="p-5 rounded-xl bg-zinc-900 border border-zinc-800/50 relative overflow-hidden">
-                            <div className="relative z-10">
-                                <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-1">Net Cash Available</p>
-                                <h3 className={`text-3xl font-bold ${netCash < 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                    ${netCash.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </h3>
-                                <p className="text-xs text-zinc-600 mt-2">Income - (Paid Bills + Unplanned)</p>
-                            </div>
-                            <BanknotesIcon className="absolute right-4 top-4 w-12 h-12 text-zinc-800/50" />
-                        </div>
-                        <div className="p-5 rounded-xl bg-zinc-900 border border-zinc-800/50 relative overflow-hidden">
-                            <div className="relative z-10">
-                                <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-1">Total Expenses Paid</p>
-                                <h3 className="text-3xl font-bold text-white">
-                                    ${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </h3>
-                                <div className="flex gap-2 mt-2 text-xs">
-                                    <span className="text-blue-400">Fixed: ${totalPaidFixed.toLocaleString()}</span>
-                                    <span className="text-orange-400">Unplanned: ${totalUnplanned.toLocaleString()}</span>
-                                </div>
-                            </div>
-                            <CreditCardIcon className="absolute right-4 top-4 w-12 h-12 text-zinc-800/50" />
-                        </div>
-                        <div className="p-5 rounded-xl bg-zinc-900 border border-zinc-800/50 relative overflow-hidden">
-                            <div className="relative z-10">
-                                <p className="text-zinc-500 text-xs font-medium uppercase tracking-wider mb-1">Projected Remaining</p>
-                                <h3 className="text-3xl font-bold text-zinc-300">
-                                    ${(monthlyIncome - totalFixedProjected - totalUnplanned).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                </h3>
-                                <p className="text-xs text-zinc-600 mt-2">Assuming all bills paid</p>
-                            </div>
-                            <WalletIcon className="absolute right-4 top-4 w-12 h-12 text-zinc-800/50" />
-                        </div>
-                    </div>
+    const App = () => {
+      return (
+        <AuthProvider>
+          <FinanceProvider>
+            <HashRouter>
+              <Routes>
+                <Route path="/login" element={<Login />} />
+                <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+                <Route path="/bills" element={<PrivateRoute><Bills /></PrivateRoute>} />
+                <Route path="/forecast" element={<PrivateRoute><Forecast /></PrivateRoute>} />
+              </Routes>
+            </HashRouter>
+          </FinanceProvider>
+        </AuthProvider>
+      );
+    };
 
-                    <div className="bg-zinc-900/50 rounded-xl border border-zinc-800 overflow-hidden">
-                        <div className="p-4 border-b border-zinc-800 flex justify-between items-center bg-zinc-900">
-                            <h3 className="font-medium text-white flex items-center gap-2">
-                                <span className="w-2 h-2 bg-orange-500 rounded-full"></span>
-                                Unplanned Expenses
-                            </h3>
-                            <button 
-                                onClick={() => { setIsAdding(true); setEditingId(null); setFormState({name:'', amount:'', date: new Date().toISOString().split('T')[0]}); }}
-                                className="text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md transition-colors flex items-center gap-1"
-                            >
-                                <PlusIcon className="w-3 h-3" /> Add Expense
-                            </button>
-                        </div>
-
-                        {isAdding && (
-                            <form onSubmit={handleSubmit} className="p-4 bg-zinc-800/30 border-b border-zinc-800 grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                                <div className="md:col-span-3">
-                                    <label className="block text-[10px] uppercase text-zinc-500 mb-1">Date</label>
-                                    <input required type="date" value={formState.date} onChange={e => setFormState({...formState, date: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                </div>
-                                <div className="md:col-span-5">
-                                    <label className="block text-[10px] uppercase text-zinc-500 mb-1">Description</label>
-                                    <input required type="text" placeholder="e.g. Groceries" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                </div>
-                                <div className="md:col-span-2">
-                                    <label className="block text-[10px] uppercase text-zinc-500 mb-1">Amount</label>
-                                    <input required type="number" step="0.01" placeholder="0.00" value={formState.amount} onChange={e => setFormState({...formState, amount: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                </div>
-                                <div className="md:col-span-2 flex gap-2">
-                                    <button type="submit" className="flex-1 bg-green-600 hover:bg-green-500 text-white text-sm py-2 rounded">{editingId ? 'Save' : 'Add'}</button>
-                                    <button type="button" onClick={() => setIsAdding(false)} className="px-3 bg-zinc-700 hover:bg-zinc-600 text-white text-sm py-2 rounded">Cancel</button>
-                                </div>
-                            </form>
-                        )}
-                        <div className="divide-y divide-zinc-800/50">
-                            {currentMonthUnplanned.length === 0 ? (
-                                <div className="p-8 text-center text-zinc-500 text-sm">No unplanned expenses this month.</div>
-                            ) : (
-                                currentMonthUnplanned.map(expense => (
-                                    <div key={expense.id} className="p-4 flex items-center justify-between hover:bg-zinc-800/30 transition-colors group">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-10 h-10 rounded-full bg-zinc-800 flex items-center justify-center text-zinc-400 text-xs font-mono">
-                                                {new Date(expense.date).getDate()}
-                                            </div>
-                                            <div>
-                                                <div className="font-medium text-zinc-200">{expense.name}</div>
-                                                <div className="text-xs text-zinc-500">{expense.date}</div>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-6">
-                                            <div className="font-bold text-white">-${expense.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                <button onClick={() => startEdit(expense)} className="p-1.5 text-zinc-400 hover:text-blue-400 hover:bg-blue-400/10 rounded"><PencilIcon className="w-4 h-4" /></button>
-                                                <button onClick={() => onDeleteUnplanned(expense.id)} className="p-1.5 text-zinc-400 hover:text-red-400 hover:bg-red-400/10 rounded"><TrashIcon className="w-4 h-4" /></button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 4. Expenses Page Component
-        const ExpensesPage = ({ state, onAdd, onUpdate, onDelete, onTogglePaid }) => {
-            const [isAdding, setIsAdding] = useState(false);
-            const [editingId, setEditingId] = useState(null);
-            const [formState, setFormState] = useState({ name: '', amount: '', frequency: 'monthly', dueDay: '1', terminationDate: '' });
-
-            const currentDate = new Date();
-            const currentMonthKey = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}`;
-
-            const handleSubmit = (e) => {
-                e.preventDefault();
-                const payload = {
-                    name: formState.name,
-                    amount: parseFloat(formState.amount),
-                    frequency: formState.frequency,
-                    dueDay: parseInt(formState.dueDay),
-                    terminationDate: formState.terminationDate || undefined
-                };
-                if (editingId) {
-                    onUpdate({ id: editingId, ...payload });
-                    setEditingId(null);
-                } else {
-                    onAdd(payload);
-                }
-                setIsAdding(false);
-                setFormState({ name: '', amount: '', frequency: 'monthly', dueDay: '1', terminationDate: '' });
-            };
-
-            const startEdit = (item) => {
-                setFormState({
-                    name: item.name,
-                    amount: item.amount.toString(),
-                    frequency: item.frequency,
-                    dueDay: item.dueDay.toString(),
-                    terminationDate: item.terminationDate || ''
-                });
-                setEditingId(item.id);
-                setIsAdding(true);
-            };
-
-            return (
-                <div className="space-y-6 animate-in fade-in duration-500">
-                    <header className="flex justify-between items-center">
-                        <div>
-                            <h2 className="text-2xl font-bold text-white tracking-tight">Fixed Expenses</h2>
-                            <p className="text-zinc-400 text-sm">Manage recurring bills</p>
-                        </div>
-                        <button onClick={() => { setIsAdding(!isAdding); setEditingId(null); }} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors">
-                            <PlusIcon className="w-4 h-4" /> New Bill
-                        </button>
-                    </header>
-
-                    {isAdding && (
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-                            <h3 className="text-white font-medium mb-4">{editingId ? 'Edit Expense' : 'Add Recurring Expense'}</h3>
-                            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
-                                <div className="lg:col-span-2">
-                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Name</label>
-                                    <input required type="text" value={formState.name} onChange={e => setFormState({...formState, name: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="e.g. Rent" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Amount</label>
-                                    <input required type="number" step="0.01" value={formState.amount} onChange={e => setFormState({...formState, amount: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="0.00" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Frequency</label>
-                                    <select value={formState.frequency} onChange={e => setFormState({...formState, frequency: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none">
-                                        <option value="monthly">Monthly</option>
-                                        <option value="semi-monthly">Semi-Monthly</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Due Day</label>
-                                    <input required type="number" min="1" max="31" value={formState.dueDay} onChange={e => setFormState({...formState, dueDay: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                </div>
-                                <div>
-                                    <label className="block text-xs uppercase text-zinc-500 mb-1">Ends On (Opt)</label>
-                                    <input type="date" value={formState.terminationDate} onChange={e => setFormState({...formState, terminationDate: e.target.value})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                </div>
-                                <div className="lg:col-span-6 flex justify-end gap-2 mt-2">
-                                    <button type="button" onClick={() => setIsAdding(false)} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded hover:bg-zinc-700 text-sm">Cancel</button>
-                                    <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">{editingId ? 'Save' : 'Add'}</button>
-                                </div>
-                            </form>
-                        </div>
-                    )}
-
-                    <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
-                        <div className="grid grid-cols-12 gap-4 p-4 border-b border-zinc-800 bg-zinc-900 text-xs font-medium text-zinc-500 uppercase tracking-wider">
-                            <div className="col-span-4">Expense</div>
-                            <div className="col-span-2">Amount</div>
-                            <div className="col-span-2">Due Date</div>
-                            <div className="col-span-2 text-center">Status</div>
-                            <div className="col-span-2 text-right">Actions</div>
-                        </div>
-                        <div className="divide-y divide-zinc-800">
-                            {state.fixedExpenses.map(expense => {
-                                const isPaid = state.paidStatus[`${expense.id}_${currentMonthKey}`];
-                                const isTerminated = expense.terminationDate && expense.terminationDate < currentMonthKey + '-01';
-                                if (isTerminated) return null;
-                                return (
-                                    <div key={expense.id} className={`grid grid-cols-12 gap-4 p-4 items-center hover:bg-zinc-800/30 transition-colors ${isPaid ? 'opacity-60' : ''}`}>
-                                        <div className="col-span-4">
-                                            <div className="font-medium text-white">{expense.name}</div>
-                                            <div className="text-[10px] text-zinc-500">{expense.frequency}</div>
-                                        </div>
-                                        <div className="col-span-2 font-mono text-zinc-300">${expense.amount.toLocaleString()}</div>
-                                        <div className="col-span-2 text-sm text-zinc-400">Day {expense.dueDay}</div>
-                                        <div className="col-span-2 flex justify-center">
-                                            <button onClick={() => onTogglePaid(expense.id, currentMonthKey)} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${isPaid ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-zinc-800 text-zinc-400 border border-zinc-700 hover:border-zinc-500'}`}>
-                                                {isPaid ? <CheckCircleSolid className="w-4 h-4" /> : <CheckCircleIcon className="w-4 h-4" />}
-                                                {isPaid ? 'Paid' : 'Mark Paid'}
-                                            </button>
-                                        </div>
-                                        <div className="col-span-2 flex justify-end gap-2">
-                                            <button onClick={() => startEdit(expense)} className="p-1.5 text-zinc-500 hover:text-blue-400 rounded hover:bg-zinc-800"><PencilIcon className="w-4 h-4" /></button>
-                                            <button onClick={() => onDelete(expense.id)} className="p-1.5 text-zinc-500 hover:text-red-400 rounded hover:bg-zinc-800"><TrashIcon className="w-4 h-4" /></button>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {state.fixedExpenses.length === 0 && <div className="p-8 text-center text-zinc-500 text-sm">No fixed expenses yet.</div>}
-                        </div>
-                    </div>
-                </div>
-            );
-        };
-
-        // 5. Forecast Page Component
-        const ForecastPage = ({ state, onUpdateIncome }) => {
-            const [isEditingIncome, setIsEditingIncome] = useState(false);
-            const [tempIncome, setTempIncome] = useState(state.income);
-
-            const months = [];
-            const today = new Date();
-            for (let i = 0; i < 3; i++) {
-                const d = new Date(today.getFullYear(), today.getMonth() + i, 1);
-                months.push({
-                    date: d,
-                    key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`,
-                    name: d.toLocaleString('default', { month: 'long', year: 'numeric' })
-                });
-            }
-
-            const saveIncome = (e) => {
-                e.preventDefault();
-                onUpdateIncome(tempIncome);
-                setIsEditingIncome(false);
-            };
-
-            return (
-                <div className="space-y-6 animate-in fade-in duration-500">
-                     <header className="flex justify-between items-center">
-                        <div>
-                            <h2 className="text-2xl font-bold text-white tracking-tight">3-Month Forecast</h2>
-                            <p className="text-zinc-400 text-sm">Projected cash flow</p>
-                        </div>
-                        <button onClick={() => setIsEditingIncome(true)} className="text-zinc-400 hover:text-white flex items-center gap-2 text-xs border border-zinc-700 rounded px-3 py-1.5 hover:bg-zinc-800 transition-colors">
-                            <Cog6ToothIcon className="w-4 h-4" /> Income Settings
-                        </button>
-                    </header>
-
-                    {isEditingIncome && (
-                        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
-                             <h3 className="text-white font-medium mb-4">Income Configuration</h3>
-                             <form onSubmit={saveIncome} className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div>
-                                     <label className="block text-xs uppercase text-zinc-500 mb-1">Semi-Monthly Net Income</label>
-                                     <div className="relative">
-                                        <span className="absolute left-3 top-2 text-zinc-500">$</span>
-                                        <input type="number" required value={tempIncome.semiMonthlyAmount} onChange={e => setTempIncome({...tempIncome, semiMonthlyAmount: parseFloat(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded pl-6 pr-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                     </div>
-                                     <p className="text-[10px] text-zinc-500 mt-1">Amount per paycheck</p>
-                                </div>
-                                <div>
-                                     <label className="block text-xs uppercase text-zinc-500 mb-1">Payout Date 1 (Day)</label>
-                                     <input type="number" min="1" max="31" required value={tempIncome.payoutDay1} onChange={e => setTempIncome({...tempIncome, payoutDay1: parseInt(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                </div>
-                                <div>
-                                     <label className="block text-xs uppercase text-zinc-500 mb-1">Payout Date 2 (Day)</label>
-                                     <input type="number" min="1" max="31" required value={tempIncome.payoutDay2} onChange={e => setTempIncome({...tempIncome, payoutDay2: parseInt(e.target.value)})} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
-                                </div>
-                                <div className="md:col-span-3 flex justify-end gap-2 mt-2">
-                                     <button type="button" onClick={() => setIsEditingIncome(false)} className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded hover:bg-zinc-700 text-sm">Cancel</button>
-                                     <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded hover:bg-blue-500 text-sm">Update Income</button>
-                                </div>
-                             </form>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {months.map((month, index) => {
-                            const incomePerPayout = state.income.semiMonthlyAmount || 0;
-                            const totalMonthlyIncome = incomePerPayout * 2;
-                            const monthlyExpenses = state.fixedExpenses.filter(e => {
-                                if (e.terminationDate && e.terminationDate < month.key + '-01') return false;
-                                return true;
-                            });
-                            const totalExpenses = monthlyExpenses.reduce((acc, e) => acc + (e.frequency === 'semi-monthly' ? e.amount * 2 : e.amount), 0);
-                            const balance = totalMonthlyIncome - totalExpenses;
-
-                            return (
-                                <div key={month.key} className={`rounded-xl border ${index === 0 ? 'bg-zinc-900/80 border-blue-500/30 ring-1 ring-blue-500/20' : 'bg-zinc-900/30 border-zinc-800'}`}>
-                                    <div className="p-4 border-b border-zinc-800/50 flex justify-between items-center">
-                                        <div className="flex items-center gap-2 font-bold text-zinc-100">
-                                            <CalendarDaysIcon className="w-5 h-5 text-zinc-500" />
-                                            {month.name}
-                                        </div>
-                                        {index === 0 && <span className="text-[10px] font-bold bg-blue-900/30 text-blue-400 px-2 py-0.5 rounded border border-blue-800">CURRENT</span>}
-                                    </div>
-                                    <div className="p-4 space-y-4">
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider">Income Events</p>
-                                            <div className="flex justify-between items-center text-sm p-2 bg-zinc-800/30 rounded border border-zinc-800/50">
-                                                <span className="text-zinc-300">Payout 1 ({state.income.payoutDay1}th)</span>
-                                                <span className="text-emerald-400 font-mono">+${incomePerPayout.toLocaleString()}</span>
-                                            </div>
-                                            <div className="flex justify-between items-center text-sm p-2 bg-zinc-800/30 rounded border border-zinc-800/50">
-                                                <span className="text-zinc-300">Payout 2 ({state.income.payoutDay2}th)</span>
-                                                <span className="text-emerald-400 font-mono">+${incomePerPayout.toLocaleString()}</span>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <p className="text-[10px] uppercase text-zinc-500 font-bold tracking-wider">Projected Expenses</p>
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-zinc-400">Fixed Bills ({monthlyExpenses.length})</span>
-                                                <span className="text-red-400 font-mono">-${totalExpenses.toLocaleString()}</span>
-                                            </div>
-                                        </div>
-                                        <div className="pt-4 border-t border-zinc-800 flex justify-between items-center">
-                                            <span className="text-sm font-medium text-zinc-300">Projected Net</span>
-                                            <span className={`text-lg font-bold ${balance >= 0 ? 'text-white' : 'text-red-500'}`}>
-                                                ${balance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            );
-        };
-
-        // 6. Main App Component
-        const App = () => {
-            const [user, setUser] = useState(null);
-            const [loading, setLoading] = useState(true);
-            const [state, setState] = useState(INITIAL_STATE);
-            const [activeView, setActiveView] = useState('dashboard');
-            const [dataLoaded, setDataLoaded] = useState(false);
-            const [saveStatus, setSaveStatus] = useState('saved');
-
-            useEffect(() => {
-                const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-                    setUser(currentUser);
-                    setLoading(true);
-
-                    if (currentUser) {
-                        try {
-                            const docRef = doc(db, 'users', currentUser.uid);
-                            const docSnap = await getDoc(docRef);
-
-                            if (docSnap.exists()) {
-                                const data = docSnap.data();
-                                // Migration for old monthly data if present
-                                if (data.income && data.income.monthlyAmount) {
-                                    data.income.semiMonthlyAmount = data.income.monthlyAmount / 2;
-                                    delete data.income.monthlyAmount;
-                                }
-                                setState({ ...INITIAL_STATE, ...data });
-                            } else {
-                                await setDoc(docRef, INITIAL_STATE);
-                                setState(INITIAL_STATE);
-                            }
-                        } catch (error) {
-                            console.error("Error fetching data:", error);
-                        } finally {
-                            setDataLoaded(true);
-                            setLoading(false);
-                        }
-                    } else {
-                        setState(INITIAL_STATE);
-                        setDataLoaded(false);
-                        setLoading(false);
-                    }
-                });
-                return () => unsubscribe();
-            }, []);
-
-            useEffect(() => {
-                if (!user || !dataLoaded) return;
-                const saveData = async () => {
-                    setSaveStatus('saving');
-                    try {
-                        await setDoc(doc(db, 'users', user.uid), state);
-                        setSaveStatus('saved');
-                    } catch (error) {
-                        console.error("Error saving:", error);
-                        setSaveStatus('error');
-                    }
-                };
-                const timeoutId = setTimeout(saveData, 1000);
-                return () => clearTimeout(timeoutId);
-            }, [state, user, dataLoaded]);
-
-            const addFixedExpense = (expense) => {
-                const newExpense = { ...expense, id: crypto.randomUUID() };
-                setState(prev => ({ ...prev, fixedExpenses: [...prev.fixedExpenses, newExpense] }));
-            };
-
-            const updateFixedExpense = (expense) => {
-                setState(prev => ({ ...prev, fixedExpenses: prev.fixedExpenses.map(e => e.id === expense.id ? expense : e) }));
-            };
-
-            const deleteFixedExpense = (id) => {
-                setState(prev => ({ ...prev, fixedExpenses: prev.fixedExpenses.filter(e => e.id !== id) }));
-            };
-
-            const togglePaid = (id, monthKey) => {
-                setState(prev => {
-                    const key = `${id}_${monthKey}`;
-                    return { ...prev, paidStatus: { ...prev.paidStatus, [key]: !prev.paidStatus[key] } };
-                });
-            };
-
-            const addUnplanned = (expense) => {
-                const newExpense = { ...expense, id: crypto.randomUUID() };
-                setState(prev => ({ ...prev, unplannedExpenses: [newExpense, ...prev.unplannedExpenses] }));
-            };
-
-            const updateUnplanned = (expense) => {
-                setState(prev => ({ ...prev, unplannedExpenses: prev.unplannedExpenses.map(e => e.id === expense.id ? expense : e) }));
-            };
-
-            const deleteUnplanned = (id) => {
-                setState(prev => ({ ...prev, unplannedExpenses: prev.unplannedExpenses.filter(e => e.id !== id) }));
-            };
-
-            const updateIncome = (income) => {
-                setState(prev => ({ ...prev, income }));
-            };
-
-            const handleLogout = async () => await signOut(auth);
-
-            if (loading) {
-                return (
-                    <div className="h-screen w-full bg-[#09090b] flex items-center justify-center">
-                        <div className="flex flex-col items-center space-y-4">
-                            <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                            <div className="text-zinc-500 text-sm animate-pulse">Loading FinTracker...</div>
-                        </div>
-                    </div>
-                );
-            }
-
-            if (!user) return <Login />;
-
-            return (
-                <div className="flex h-screen w-full bg-[#09090b] overflow-hidden">
-                    <Sidebar activeView={activeView} onChangeView={setActiveView} user={user} onLogout={handleLogout} />
-                    <main className="flex-1 overflow-y-auto h-full bg-dot-grid relative">
-                        <div className="absolute top-4 right-4 z-50 pointer-events-none">
-                            {saveStatus === 'saving' && <span className="text-[10px] text-zinc-500 bg-zinc-900/50 border border-zinc-800 px-2 py-1 rounded-full flex items-center gap-2"><div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>Syncing...</span>}
-                            {saveStatus === 'error' && <span className="text-[10px] text-red-400 bg-red-900/20 border border-red-800 px-2 py-1 rounded-full">Sync Error</span>}
-                        </div>
-                        <div className="max-w-5xl mx-auto p-6 md:p-12 min-h-full">
-                            {activeView === 'dashboard' && <Dashboard state={state} onAddUnplanned={addUnplanned} onUpdateUnplanned={updateUnplanned} onDeleteUnplanned={deleteUnplanned} />}
-                            {activeView === 'expenses' && <ExpensesPage state={state} onAdd={addFixedExpense} onUpdate={updateFixedExpense} onDelete={deleteFixedExpense} onTogglePaid={togglePaid} />}
-                            {activeView === 'forecast' && <ForecastPage state={state} onUpdateIncome={updateIncome} />}
-                        </div>
-                    </main>
-                </div>
-            );
-        };
-
-        // Mount App
-        const root = createRoot(document.getElementById('root'));
-        root.render(<App />);
-    </script>
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
 </body>
 </html>
