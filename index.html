@@ -114,7 +114,7 @@
             <div class="glass-panel rounded-2xl border border-gray-800 p-6">
                 <div class="flex justify-between items-center mb-6">
                     <h2 class="text-lg font-semibold flex items-center gap-2">
-                        <i class="fa-solid fa-list-check text-gray-400"></i> Monthly Payment History
+                        <i class="fa-solid fa-list-check text-gray-400"></i> Monthly History
                     </h2>
                     <button onclick="openExpenseModal()" class="bg-gray-800 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition-colors border border-gray-700 flex items-center gap-2">
                         <i class="fa-solid fa-plus"></i> Add Manual Expense
@@ -124,7 +124,7 @@
                     <table class="w-full text-left text-sm text-gray-400">
                         <thead class="bg-gray-900/50 uppercase text-xs font-semibold text-gray-500">
                             <tr>
-                                <th class="px-4 py-3 rounded-l-lg">Payment Date</th>
+                                <th class="px-4 py-3 rounded-l-lg">Date</th>
                                 <th class="px-4 py-3">Type</th>
                                 <th class="px-4 py-3">Description</th>
                                 <th class="px-4 py-3 text-right">Amount</th>
@@ -207,11 +207,12 @@
         </div>
     </div>
 
-    <!-- MODAL: Add/Edit Manual Expense -->
+    <!-- MODAL: Add/Edit Manual Expense & Edit Income -->
     <div id="modal-expense" class="fixed inset-0 bg-black/80 backdrop-blur-sm hidden items-center justify-center z-50">
         <div class="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md shadow-2xl transform transition-all">
-            <h3 class="text-xl font-bold mb-4 text-white">Expense Details</h3>
+            <h3 class="text-xl font-bold mb-4 text-white" id="expense-modal-title">Expense Details</h3>
             <input type="hidden" id="expense-id">
+            <input type="hidden" id="expense-type" value="manual">
             <div class="space-y-4">
                 <div>
                     <label class="block text-xs font-medium text-gray-400 mb-1">Description</label>
@@ -314,6 +315,14 @@
                     <div>
                         <label class="block text-xs font-medium text-gray-400 mb-1">2nd Payout Day</label>
                         <input type="number" id="setting-day2" min="1" max="31" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white focus:ring-2 focus:ring-brand-600 outline-none">
+                    </div>
+                </div>
+
+                <!-- New Section: Current Month Quick Actions -->
+                <div class="border-t border-gray-800 pt-4 mt-2">
+                    <h4 class="text-sm font-bold text-white mb-3">Current Month Payouts</h4>
+                    <div class="grid grid-cols-2 gap-3" id="settings-payout-status">
+                        <!-- Injected via JS -->
                     </div>
                 </div>
             </div>
@@ -515,8 +524,9 @@
             document.getElementById('dash-pending-bills').innerText = billsDue;
 
             const listEl = document.getElementById('dashboard-history-list');
+            // Filter to include Income, Manual, and Bills
             const historyList = monthTransactions
-                .filter(t => t.type === 'manual' || t.type === 'bill')
+                .filter(t => t.type === 'manual' || t.type === 'bill' || t.type === 'income')
                 .sort((a,b) => new Date(b.date) - new Date(a.date));
             
             if(historyList.length === 0) {
@@ -524,16 +534,21 @@
             } else {
                 listEl.innerHTML = historyList.map(tx => {
                     const isBill = tx.type === 'bill';
+                    const isIncome = tx.type === 'income';
+                    
+                    let typeBadge = '';
+                    if (isBill) typeBadge = '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded bg-indigo-900/30 text-indigo-400">Bill</span>';
+                    else if (isIncome) typeBadge = '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded bg-green-900/30 text-green-400">Income</span>';
+                    else typeBadge = '<span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded bg-orange-900/30 text-orange-400">Manual</span>';
+
                     return `
                     <tr class="hover:bg-gray-900/50 transition-colors group">
                         <td class="px-4 py-3 font-mono text-xs text-gray-500">${tx.date}</td>
-                        <td class="px-4 py-3">
-                            <span class="text-[10px] uppercase tracking-wider px-2 py-1 rounded ${isBill ? 'bg-indigo-900/30 text-indigo-400' : 'bg-orange-900/30 text-orange-400'}">
-                                ${isBill ? 'Bill' : 'Manual'}
-                            </span>
+                        <td class="px-4 py-3">${typeBadge}</td>
+                        <td class="px-4 py-3 text-white text-sm">${tx.description || (isBill ? 'Recurring Bill' : (isIncome ? 'Salary Payout' : 'Expense'))}</td>
+                        <td class="px-4 py-3 text-right font-medium ${isIncome ? 'text-green-400' : 'text-red-400'}">
+                            ${isIncome ? '+' : '-'}${formatCurrency(tx.amount)}
                         </td>
-                        <td class="px-4 py-3 text-white text-sm">${tx.description || (isBill ? 'Recurring Bill' : 'Expense')}</td>
-                        <td class="px-4 py-3 text-right font-medium text-red-400">-${formatCurrency(tx.amount)}</td>
                         <td class="px-4 py-3 text-center">
                             <div class="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
                                 ${!isBill ? `
@@ -550,7 +565,7 @@
             }
         }
 
-        // 2. Bills Logic (With X of Y and Semi-Monthly)
+        // 2. Bills Logic
         window.renderBills = function() {
             const listEl = document.getElementById('bills-list');
             if (state.bills.length === 0) {
@@ -566,28 +581,19 @@
                    if(bill.endDate && new Date(bill.endDate) < new Date(currentMonthStr + '-01')) return ''; 
                 }
 
-                // Payment Counter Logic (Enhanced)
                 let counterStr = 'Payment Counter not started';
                 if (bill.frequency !== 'one-time' && bill.startDate) {
                     const start = new Date(bill.startDate);
                     const now = new Date();
-                    
-                    // Calculate total months passed since start
                     const monthsPassed = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
-                    
                     let currentTerm = monthsPassed + 1; 
                     if (currentTerm < 1) currentTerm = 1; 
 
-                    if (bill.frequency === 'semi-monthly') {
-                        counterStr = `Month #${currentTerm}`;
-                    } else {
-                        counterStr = `Payment #${currentTerm}`;
-                    }
+                    if (bill.frequency === 'semi-monthly') counterStr = `Month #${currentTerm}`;
+                    else counterStr = `Payment #${currentTerm}`;
                     
-                    // Append Total if End Date exists
                     if(bill.endDate) {
                          const end = new Date(bill.endDate);
-                         // FIXED: Added + 1 to make months inclusive
                          const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
                          counterStr += ` of ${totalMonths}`;
                      }
@@ -595,12 +601,10 @@
                     counterStr = "Single Payment";
                 }
 
-                // Render Actions
                 let actionsHtml = '';
                 
                 if (bill.frequency === 'semi-monthly') {
                     const paymentsThisMonth = state.ledger.filter(l => l.refId === bill.id && l.date.startsWith(currentMonthStr) && l.isPaid);
-                    
                     paymentsThisMonth.sort((a,b) => new Date(a.date) - new Date(b.date));
                     
                     const paid1 = paymentsThisMonth.length > 0 ? paymentsThisMonth[0] : null;
@@ -620,7 +624,6 @@
                      const paid = state.ledger.find(l => l.refId === bill.id && l.isPaid); 
                      actionsHtml = `<div class="mt-4">${renderBillBtn(bill, date, paid, 'Pay')}</div>`;
                 } else {
-                    // Monthly
                     const defaultDate = `${currentMonthStr}-${String(bill.dueDay).padStart(2,'0')}`;
                     const paid = state.ledger.find(l => l.refId === bill.id && l.date.startsWith(currentMonthStr) && l.isPaid);
                     actionsHtml = `<div class="mt-4">${renderBillBtn(bill, defaultDate, paid, 'Pay')}</div>`;
@@ -654,7 +657,6 @@
 
         function renderBillBtn(bill, defaultDateStr, paidEntry, label) {
             const isPaid = !!paidEntry;
-            // If paid, show the ACTUAL date paid
             const displayDate = isPaid ? paidEntry.date : defaultDateStr;
             
             return `
@@ -703,7 +705,6 @@
                         [bill.dueDay, bill.dueDay2].forEach(day => {
                             if(!day) return;
                             const dateStr = `${monthStr}-${String(day).padStart(2,'0')}`;
-                            // Imprecise match for forecast check
                             const paid = state.ledger.find(l => l.refId === bill.id && l.date.startsWith(monthStr));
                             items.push(createForecastItem(bill, day, dateStr, paid));
                         });
@@ -779,11 +780,8 @@
         window.triggerTransaction = function(type, refId, defaultDate, currentAmount, title, isCompleted, ledgerId) {
             if (isCompleted) {
                 if(confirm("Un-mark this transaction? It will be removed from history.")) {
-                    // If we have the direct ledger ID, use it. Otherwise search.
-                    if(ledgerId) {
-                         deleteTransaction(ledgerId);
-                    } else {
-                        // Fallback for forecast items or loose matches
+                    if(ledgerId) deleteTransaction(ledgerId);
+                    else {
                         const entry = state.ledger.find(l => l.refId === refId && l.date === defaultDate);
                         if(entry) deleteTransaction(entry.id);
                     }
@@ -794,7 +792,7 @@
             document.getElementById('trans-modal-desc').innerText = `Confirming: ${title}`;
             document.getElementById('trans-type').value = type;
             document.getElementById('trans-ref-id').value = refId;
-            document.getElementById('trans-date').value = defaultDate; // Pre-fill with due date, but editable
+            document.getElementById('trans-date').value = defaultDate;
             document.getElementById('trans-amount').value = currentAmount;
             openModal('modal-transaction');
         }
@@ -809,32 +807,41 @@
                 await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
                     type: document.getElementById('trans-type').value,
                     amount: amount,
-                    date: date, // Save the user-selected date
+                    date: date,
                     isPaid: true,
                     description: document.getElementById('trans-modal-desc').innerText.replace('Confirming: ', ''),
                     refId: document.getElementById('trans-ref-id').value, 
                     createdAt: new Date().toISOString()
                 });
                 closeModal('modal-transaction');
+                // If transaction was from Settings modal, close that too
+                closeModal('modal-settings');
             } catch (e) { alert("Error"); console.error(e); }
         }
 
-        // Edit Unplanned
+        // Edit Unplanned & Income
         window.editTransaction = function(id) {
             const tx = state.ledger.find(t => t.id === id);
-            if(!tx || tx.type !== 'manual') return;
+            // Allow editing 'manual' and 'income'
+            if(!tx || (tx.type !== 'manual' && tx.type !== 'income')) return;
             
             document.getElementById('expense-id').value = tx.id;
             document.getElementById('expense-desc').value = tx.description;
             document.getElementById('expense-amount').value = tx.amount;
             document.getElementById('expense-date').value = tx.date;
+            document.getElementById('expense-type').value = tx.type;
+            
+            // Update modal title dynamically
+            document.getElementById('expense-modal-title').innerText = tx.type === 'income' ? 'Edit Income' : 'Edit Expense';
+            
             openModal('modal-expense');
         }
 
         window.saveExpense = async function() {
             const id = document.getElementById('expense-id').value;
+            const type = document.getElementById('expense-type').value;
             const data = {
-                type: 'manual',
+                type: type,
                 description: document.getElementById('expense-desc').value,
                 amount: parseFloat(document.getElementById('expense-amount').value),
                 date: document.getElementById('expense-date').value || new Date().toISOString().split('T')[0],
@@ -865,7 +872,7 @@
                 lbl1.innerText = "1st Due Day";
             } else if (freq === 'one-time') {
                 due2.classList.add('hidden');
-                lbl1.innerText = "Due Day (Day of month)"; // or change input to full date
+                lbl1.innerText = "Due Day (Day of month)";
             } else {
                 due2.classList.add('hidden');
                 lbl1.innerText = "Day of Month Due";
@@ -924,30 +931,45 @@
             } catch (e) { console.error(e); }
         }
 
-        // Shared
-        window.deleteTransaction = async (id) => {
-            if(confirm("Remove this?")) await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger', id));
-        }
-        window.deleteBill = async () => {
-             if(confirm("Delete recurring bill?")) {
-                 const id = document.getElementById('bill-id').value;
-                 await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', id));
-                 closeModal('modal-bill');
-             }
-        }
-        window.openExpenseModal = () => {
-            document.getElementById('expense-id').value = '';
-            document.getElementById('expense-desc').value = '';
-            document.getElementById('expense-amount').value = '';
-            document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
-            openModal('modal-expense');
-        }
+        // Settings with Current Month Actions
         window.openSettingsModal = () => {
             document.getElementById('setting-income').value = state.settings.income;
             document.getElementById('setting-day1').value = state.settings.day1;
             document.getElementById('setting-day2').value = state.settings.day2;
+
+            // Render Quick Actions
+            const today = new Date();
+            const monthStr = today.toISOString().slice(0, 7); // YYYY-MM
+            const statusContainer = document.getElementById('settings-payout-status');
+            
+            const payoutPerCycle = state.settings.income / 2;
+
+            const actionsHtml = [0, 1].map(idx => {
+                const idBase = `income_${monthStr}_${idx}`;
+                const existing = state.ledger.find(l => l.refId === idBase && l.type === 'income');
+                const day = idx === 0 ? state.settings.day1 : state.settings.day2;
+                const date = `${monthStr}-${String(day).padStart(2,'0')}`;
+                
+                if(existing) {
+                    return `
+                    <div class="bg-green-900/20 border border-green-900/50 rounded-lg p-2 text-center">
+                        <p class="text-[10px] text-green-400 font-bold uppercase mb-1">Payout ${idx+1} Received</p>
+                        <p class="text-xs text-white">${formatCurrency(existing.amount)}</p>
+                        <button onclick="triggerTransaction('income', '${idBase}', '${date}', ${existing.amount}, 'Payout #${idx+1}', true, '${existing.id}')" class="text-[10px] text-gray-400 hover:text-red-400 mt-1">Undo</button>
+                    </div>`;
+                } else {
+                    return `
+                    <div class="bg-gray-800 border border-gray-700 rounded-lg p-2 text-center">
+                        <p class="text-[10px] text-gray-400 font-bold uppercase mb-1">Payout ${idx+1} Pending</p>
+                        <button onclick="triggerTransaction('income', '${idBase}', '${date}', ${payoutPerCycle}, 'Payout #${idx+1}', false)" class="bg-brand-600 hover:bg-brand-500 text-white text-xs px-3 py-1.5 rounded w-full">Mark Received</button>
+                    </div>`;
+                }
+            }).join('');
+            
+            statusContainer.innerHTML = actionsHtml;
             openModal('modal-settings');
         }
+
         window.saveSettings = async () => {
             const data = {
                 income: parseFloat(document.getElementById('setting-income').value) || 0,
@@ -960,6 +982,27 @@
             closeModal('modal-settings');
         }
 
+        // Shared
+        window.deleteTransaction = async (id) => {
+            if(confirm("Remove this record permanently?")) await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger', id));
+        }
+        window.deleteBill = async () => {
+             if(confirm("Delete recurring bill?")) {
+                 const id = document.getElementById('bill-id').value;
+                 await deleteDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', id));
+                 closeModal('modal-bill');
+             }
+        }
+        window.openExpenseModal = () => {
+            document.getElementById('expense-id').value = '';
+            document.getElementById('expense-type').value = 'manual';
+            document.getElementById('expense-modal-title').innerText = 'Add Manual Expense';
+            document.getElementById('expense-desc').value = '';
+            document.getElementById('expense-amount').value = '';
+            document.getElementById('expense-date').value = new Date().toISOString().split('T')[0];
+            openModal('modal-expense');
+        }
+        
         // Utils
         window.switchTab = (tabId) => {
             document.querySelectorAll('.view-section').forEach(el => el.classList.add('hidden'));
