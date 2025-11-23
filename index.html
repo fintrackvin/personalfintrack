@@ -193,6 +193,7 @@
                         <option value="one-time">One-Time</option>
                     </select>
                     <select id="bills-sort" onchange="renderBills()" class="bg-gray-900 border border-gray-800 rounded-lg px-3 py-2 text-sm text-white outline-none focus:border-brand-600">
+                        <option value="due-date">Due Date (Soonest)</option>
                         <option value="name">Name (A-Z)</option>
                         <option value="amount-desc">Amount (High-Low)</option>
                         <option value="amount-asc">Amount (Low-High)</option>
@@ -707,6 +708,26 @@
                 if (sort === 'name') return a.name.localeCompare(b.name);
                 if (sort === 'amount-desc') return b.amount - a.amount;
                 if (sort === 'amount-asc') return a.amount - b.amount;
+                
+                if (sort === 'due-date') {
+                    // Helper to find the next specific date for a bill
+                    const getNextDate = (bill) => {
+                        // Check Active Cycle first
+                        let occs = getBillOccurrencesInCycle(bill, cycles.active);
+                        // If not in active (e.g. paid or passed), check Next Cycle
+                        if (!occs.length) occs = getBillOccurrencesInCycle(bill, cycles.next);
+                        
+                        // Return first date found, or far future if none
+                        if (occs.length > 0) {
+                            // Sort occurrences by date just in case (for semi-monthly)
+                            occs.sort((x, y) => new Date(x.date) - new Date(y.date));
+                            return new Date(occs[0].date);
+                        }
+                        return new Date(9999, 11, 31); 
+                    };
+                    
+                    return getNextDate(a) - getNextDate(b);
+                }
                 return 0;
             });
 
