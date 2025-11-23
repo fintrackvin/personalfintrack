@@ -438,6 +438,14 @@
             };
         }
 
+        // Helper: Format Date object to YYYY-MM-DD Local String
+        function toLocalISOString(date) {
+            const y = date.getFullYear();
+            const m = String(date.getMonth() + 1).padStart(2, '0');
+            const d = String(date.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
         // --- CHECK PAYMENT STATUS ---
         // Checks if a bill is paid for a specific target Due Date
         function isPaidForDate(billId, targetDateStr) {
@@ -457,7 +465,8 @@
         // 1. DASHBOARD
         window.renderDashboard = function() {
             const today = new Date();
-            const monthStr = today.toISOString().slice(0, 7);
+            // Use local ISO string for month comparison to avoid timezone shifts
+            const monthStr = toLocalISOString(today).slice(0, 7);
             
             // Stats
             const txs = state.ledger.filter(t => t.date.startsWith(monthStr));
@@ -477,7 +486,8 @@
             state.bills.forEach(b => {
                 const occurrences = getBillOccurrencesInCycle(b, cycles.active);
                 occurrences.forEach(occ => {
-                     if(!occ.isPaid && today > new Date(occ.date)) urgentCount++;
+                     // Simple string comparison works for YYYY-MM-DD
+                     if(!occ.isPaid && toLocalISOString(today) > occ.date) urgentCount++;
                 });
             });
             document.getElementById('dash-urgent-count').innerText = urgentCount;
@@ -555,7 +565,8 @@
                         if (dateObj > eDate) return;
                     }
 
-                    const dateStr = dateObj.toISOString().slice(0, 10);
+                    // FIX: Use local date formatting instead of toISOString()
+                    const dateStr = toLocalISOString(dateObj);
                     const paid = isPaidForDate(bill.id, dateStr);
                     const total = bill.amount + (bill.arrears || 0);
                     res.push({
@@ -761,7 +772,8 @@
         window.openExpenseModal = () => {
              document.getElementById('expense-id').value=''; setExpenseType('manual');
              document.getElementById('expense-amount').value=''; document.getElementById('expense-desc').value='';
-             document.getElementById('expense-date').value=new Date().toISOString().slice(0,10);
+             // FIX: Use local ISO string for default date
+             document.getElementById('expense-date').value = toLocalISOString(new Date());
              openModal('modal-expense');
         }
         window.saveExpense = async () => {
