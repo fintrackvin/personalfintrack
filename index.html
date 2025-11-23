@@ -475,8 +475,6 @@
             // Urgent Count (Overdue Logic)
             let urgentCount = 0;
             state.bills.forEach(b => {
-                if(b.frequency === 'one-time' && b.endDate && new Date(b.endDate) < new Date(monthStr+'-01')) return;
-                // Check if any due date in ACTIVE cycle is unpaid and passed
                 const occurrences = getBillOccurrencesInCycle(b, cycles.active);
                 occurrences.forEach(occ => {
                      if(!occ.isPaid && today > new Date(occ.date)) urgentCount++;
@@ -501,8 +499,6 @@
             // Find bills falling in this cycle
             let items = [];
             state.bills.forEach(bill => {
-                if(bill.frequency === 'one-time' && bill.endDate && new Date(bill.endDate) < cycle.start) return;
-                
                 const occurrences = getBillOccurrencesInCycle(bill, cycle);
                 items.push(...occurrences);
             });
@@ -530,9 +526,6 @@
             const res = [];
             const check = (d) => {
                 // Construct actual date object for this due day within the cycle's month(s)
-                // Cycle might span 2 months (e.g. Nov 25 - Dec 9)
-                // We check month of start date and month of end date
-                
                 let candidates = [];
                 // Case 1: Due day in Start Month
                 let date1 = new Date(cycle.start.getFullYear(), cycle.start.getMonth(), d);
@@ -544,6 +537,24 @@
                 else if (date2 >= cycle.start && date2 <= cycle.end && date2.getTime() !== date1.getTime()) candidates.push(date2);
                 
                 candidates.forEach(dateObj => {
+                    // STRICT START/END DATE CHECK
+                    // 1. Start Date Check
+                    if (bill.startDate) {
+                        // Parse start date as local date (YYYY, MM-1, DD) to match dateObj
+                        const [sy, sm, sd] = bill.startDate.split('-').map(Number);
+                        const sDate = new Date(sy, sm-1, sd);
+                        // Compare: If candidate is BEFORE start date, skip
+                        if (dateObj < sDate) return;
+                    }
+                    
+                    // 2. End Date Check
+                    if (bill.endDate) {
+                        const [ey, em, ed] = bill.endDate.split('-').map(Number);
+                        const eDate = new Date(ey, em-1, ed);
+                        // Compare: If candidate is AFTER end date, skip
+                        if (dateObj > eDate) return;
+                    }
+
                     const dateStr = dateObj.toISOString().slice(0, 10);
                     const paid = isPaidForDate(bill.id, dateStr);
                     const total = bill.amount + (bill.arrears || 0);
@@ -561,13 +572,12 @@
             if (bill.frequency === 'monthly') check(bill.dueDay);
             else if (bill.frequency === 'semi-monthly') { check(bill.dueDay); check(bill.dueDay2); }
             else if (bill.frequency === 'one-time') {
-                // One time bill logic: Check if Start Date falls in cycle
-                // We use Start Date as the effective Due Date for one-time
                  if(bill.startDate) {
-                    const d = new Date(bill.startDate);
+                    const [sy, sm, sd] = bill.startDate.split('-').map(Number);
+                    const d = new Date(sy, sm-1, sd);
                     if(d >= cycle.start && d <= cycle.end) {
                          const dateStr = bill.startDate;
-                         const paid = isPaidForDate(bill.id, dateStr); // or just isPaid generally?
+                         const paid = isPaidForDate(bill.id, dateStr); 
                          res.push({ id: bill.id, name: bill.name, amount: bill.amount, date: dateStr, isPaid: paid, arrears: 0 });
                     }
                  }
@@ -584,22 +594,16 @@
             let currentCycleStart = new Date();
             currentCycleStart.setDate(1); // Start from beginning of this month to catch current cycles
             
-            // We want roughly 3 months worth of Payouts
-            // A payout happens at the START of a cycle.
-            // Let's generate 6 cycles (2 per month * 3)
-            
             let tempCycles = [];
             let pointer = new Date();
             for(let i=0; i<6; i++) {
                 const cycles = getPayoutCycles(pointer);
-                // Avoid duplicates if pointer movement is small, but jumping 15 days is safe
                 if(!tempCycles.some(c => c.start.getTime() === cycles.active.start.getTime())) tempCycles.push(cycles.active);
                 pointer = new Date(cycles.active.end);
                 pointer.setDate(pointer.getDate() + 2); // Jump into next
             }
 
             tempCycles.forEach(cycle => {
-                // Render Card for this Cycle
                 // Header: Payout Date (Cycle Start)
                 const payoutDateStr = formatDate(cycle.start);
                 
@@ -650,9 +654,6 @@
         window.renderBills = function() {
             const listEl = document.getElementById('bills-list');
             if(!state.bills.length) { listEl.innerHTML = `<div class="col-span-full text-center py-10 text-gray-500 border border-dashed border-gray-800 rounded-xl">No bills.</div>`; return; }
-            
-            // Just show list with "Mark Next Due" logic?
-            // User requested: "Mark unpaid balance added to next due date"
             
             const today = new Date();
             const cycles = getPayoutCycles(today); // Use Active Cycle to determine "Current Due"
