@@ -113,10 +113,19 @@
                         </div>
                         <span class="bg-blue-900/30 text-blue-300 text-[10px] font-bold px-2 py-1 rounded border border-blue-800">PAY NOW</span>
                     </div>
-                    <div class="bg-gray-900/50 rounded-lg p-3 mb-3 flex justify-between items-center">
-                        <span class="text-xs text-gray-400">Cycle Income</span>
-                        <span class="text-sm font-bold text-green-400" id="cycle-active-income">₱0.00</span>
+                    
+                    <!-- Summary Block -->
+                    <div class="bg-gray-900/50 rounded-lg p-3 mb-3 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-400">Est. Income</span>
+                            <span class="text-sm font-bold text-green-400" id="cycle-active-income">₱0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-gray-800 pt-2">
+                            <span class="text-xs text-gray-400">Pending Bills</span>
+                            <span class="text-sm font-bold text-red-400" id="cycle-active-pending">₱0.00</span>
+                        </div>
                     </div>
+
                     <div id="cycle-active-list" class="space-y-2 min-h-[100px]"></div>
                 </div>
 
@@ -131,10 +140,19 @@
                         </div>
                         <span class="bg-purple-900/30 text-purple-300 text-[10px] font-bold px-2 py-1 rounded border border-purple-800">PLAN AHEAD</span>
                     </div>
-                    <div class="bg-gray-900/50 rounded-lg p-3 mb-3 flex justify-between items-center">
-                        <span class="text-xs text-gray-400">Projected Income</span>
-                        <span class="text-sm font-bold text-green-400" id="cycle-next-income">₱0.00</span>
+                    
+                    <!-- Summary Block -->
+                    <div class="bg-gray-900/50 rounded-lg p-3 mb-3 space-y-2">
+                        <div class="flex justify-between items-center">
+                            <span class="text-xs text-gray-400">Projected Income</span>
+                            <span class="text-sm font-bold text-green-400" id="cycle-next-income">₱0.00</span>
+                        </div>
+                        <div class="flex justify-between items-center border-t border-gray-800 pt-2">
+                            <span class="text-xs text-gray-400">Pending Bills</span>
+                            <span class="text-sm font-bold text-red-400" id="cycle-next-pending">₱0.00</span>
+                        </div>
                     </div>
+
                     <div id="cycle-next-list" class="space-y-2 min-h-[100px]"></div>
                 </div>
              </div>
@@ -537,6 +555,11 @@
             });
 
             items.sort((a,b) => new Date(a.date) - new Date(b.date));
+
+            // Calculate Total Pending Bills for this Cycle
+            const totalPending = items.filter(i => !i.isPaid).reduce((acc, curr) => acc + curr.amount, 0);
+            const pendingEl = document.getElementById(`${idPrefix}-pending`);
+            if(pendingEl) pendingEl.innerText = formatCurrency(totalPending);
 
             if(items.length === 0) listEl.innerHTML = `<p class="text-xs text-gray-500 text-center py-4">No bills due.</p>`;
             else {
