@@ -356,12 +356,13 @@
             <p class="text-sm text-gray-400 mb-4" id="trans-modal-desc">Confirm transaction details.</p>
             <input type="hidden" id="trans-ref-id">
             <input type="hidden" id="trans-type">
-            <input type="hidden" id="trans-target-date"> <!-- CRITICAL: Stores the specific Due Date being paid -->
+            <input type="hidden" id="trans-target-date"> 
             <input type="hidden" id="trans-arrears-amt" value="0">
+            <input type="hidden" id="trans-expected-amt" value="0"> <!-- New: For partial payment check -->
             
             <div class="space-y-4">
                 <div>
-                    <label class="block text-xs font-medium text-gray-400 mb-1">Amount</label>
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Amount Paying</label>
                     <input type="number" id="trans-amount" step="0.01" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-white">
                 </div>
                 <div>
@@ -443,9 +444,77 @@
             }));
             unsubscribers.push(onSnapshot(path('ledger'), s => {
                 state.ledger = s.docs.map(d => ({id: d.id, ...d.data()}));
+                // Auto Check for Missed Bills on Ledger Update/Load
+                checkAutoDeferrals();
                 refreshUI();
                 document.getElementById('loading-screen').classList.add('hidden');
             }));
+        }
+
+        // --- AUTOMATIC DEFERRAL SYSTEM ---
+        // Checks for any bill instances strictly before the current active cycle start that are UNPAID.
+        // Adds them to arrears and marks a 'defer' ledger entry.
+        async function checkAutoDeferrals() {
+            if (!currentUser) return;
+            const cycles = getPayoutCycles(new Date());
+            const checkEndDate = cycles.active.start; // Everything strictly before current cycle
+
+            state.bills.forEach(async (bill) => {
+                if(!bill.startDate) return;
+                
+                // Iterate relevant dates for this bill type up to checkEndDate
+                // Simplified check: We loop roughly from start date (capped at 6 months ago for safety)
+                const start = new Date(bill.startDate);
+                const cutoff = new Date();
+                cutoff.setMonth(cutoff.getMonth() - 6);
+                const loopStart = start > cutoff ? start : cutoff;
+
+                let ptr = new Date(loopStart);
+                while(ptr < checkEndDate) {
+                    // Check if ptr matches due day
+                    let isDue = false;
+                    const d = ptr.getDate();
+                    if (bill.frequency === 'monthly' && d === bill.dueDay) isDue = true;
+                    if (bill.frequency === 'semi-monthly' && (d === bill.dueDay || d === bill.dueDay2)) isDue = true;
+                    if (bill.frequency === 'one-time' && toLocalISOString(ptr) === bill.startDate) isDue = true;
+
+                    if(isDue) {
+                        // Check termination
+                        let terminated = false;
+                        if (bill.endDate && ptr > new Date(bill.endDate)) terminated = true;
+
+                        if(!terminated) {
+                            const dateStr = toLocalISOString(ptr);
+                            const paid = isPaidForDate(bill.id, dateStr); // Returns true if paid OR deferred
+                            
+                            if (!paid) {
+                                console.log(`Auto-deferring bill ${bill.name} due on ${dateStr}`);
+                                // 1. Add to Arrears
+                                const newArrears = (bill.arrears || 0) + bill.amount;
+                                // Update local state immediately to prevent double-fire in loop before refresh
+                                bill.arrears = newArrears; 
+                                
+                                // 2. Create Deferral Record (to mark date as processed)
+                                try {
+                                    await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
+                                        type: 'defer',
+                                        amount: 0, // Financial impact moved to arrears
+                                        date: dateStr,
+                                        targetDate: dateStr,
+                                        refId: bill.id,
+                                        description: `Missed - Added to Arrears (${bill.name})`,
+                                        isPaid: true,
+                                        createdAt: new Date().toISOString()
+                                    });
+                                    
+                                    await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', bill.id), { arrears: newArrears }, { merge: true });
+                                } catch(e) { console.error("Auto-defer error", e); }
+                            }
+                        }
+                    }
+                    ptr.setDate(ptr.getDate() + 1);
+                }
+            });
         }
 
         // --- CORE LOGIC: CYCLE CALCULATOR ---
@@ -454,11 +523,6 @@
             const m = referenceDate.getMonth();
             const d = referenceDate.getDate();
             const { day1, day2 } = state.settings;
-
-            // Define "Candidate" Cycles surrounding the reference date
-            // Cycle A: PrevMonth Day2 -> ThisMonth Day1 - 1
-            // Cycle B: ThisMonth Day1 -> ThisMonth Day2 - 1
-            // Cycle C: ThisMonth Day2 -> NextMonth Day1 - 1
             
             const makeDate = (yy, mm, dd) => new Date(yy, mm, dd);
             
@@ -469,17 +533,12 @@
                 { start: makeDate(y, m+1, day1), end: makeDate(y, m+1, day2-1), type: 'Period 1' }
             ];
 
-            // Find Active Cycle (today is between start and end)
             let activeIdx = cycles.findIndex(c => referenceDate >= c.start && referenceDate <= c.end);
-            if (activeIdx === -1) activeIdx = 1; // Fallback
+            if (activeIdx === -1) activeIdx = 1;
 
-            return {
-                active: cycles[activeIdx],
-                next: cycles[activeIdx + 1]
-            };
+            return { active: cycles[activeIdx], next: cycles[activeIdx + 1] };
         }
 
-        // Helper: Format Date object to YYYY-MM-DD Local String
         function toLocalISOString(date) {
             const y = date.getFullYear();
             const m = String(date.getMonth() + 1).padStart(2, '0');
@@ -487,13 +546,10 @@
             return `${y}-${m}-${d}`;
         }
 
-        // --- CHECK PAYMENT STATUS ---
-        // Checks if a bill is paid for a specific target Due Date
         function isPaidForDate(billId, targetDateStr) {
             return state.ledger.some(l => 
-                l.refId === billId && 
-                l.isPaid && 
-                (l.targetDate === targetDateStr || l.date === targetDateStr) // Backwards compatibility check
+                l.refId === billId && l.isPaid && 
+                (l.targetDate === targetDateStr || l.date === targetDateStr)
             );
         }
 
@@ -506,57 +562,42 @@
         // 1. DASHBOARD
         window.renderDashboard = function() {
             const today = new Date();
-            // Use local ISO string for month comparison to avoid timezone shifts
             const monthStr = toLocalISOString(today).slice(0, 7);
             
-            // Stats
-            const txs = state.ledger.filter(t => t.date.startsWith(monthStr));
+            const txs = state.ledger.filter(t => t.date.startsWith(monthStr) && t.type !== 'defer'); // Exclude 'defer' entries from history/math
             const inc = txs.filter(t => t.type === 'income').reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
             const exp = txs.filter(t => t.type !== 'income').reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
             
             document.getElementById('dash-net-cash').innerText = formatCurrency(inc - exp);
             document.getElementById('dash-total-paid').innerText = formatCurrency(exp);
 
-            // Cycles
             const cycles = getPayoutCycles(today);
             renderCycleCard('cycle-active', cycles.active, 'PAY NOW');
             renderCycleCard('cycle-next', cycles.next, 'PLAN AHEAD');
 
-            // Urgent Count (Overdue Logic)
             let urgentCount = 0;
             state.bills.forEach(b => {
                 const occurrences = getBillOccurrencesInCycle(b, cycles.active);
-                occurrences.forEach(occ => {
-                     // Simple string comparison works for YYYY-MM-DD
-                     if(!occ.isPaid && toLocalISOString(today) > occ.date) urgentCount++;
-                });
+                occurrences.forEach(occ => { if(!occ.isPaid && toLocalISOString(today) > occ.date) urgentCount++; });
             });
             document.getElementById('dash-urgent-count').innerText = urgentCount;
 
-            // History
             const historyList = txs.sort((a,b) => new Date(b.date) - new Date(a.date));
             document.getElementById('dashboard-history-list').innerHTML = historyList.length ? historyList.map(renderHistoryRow).join('') : `<tr><td colspan="5" class="text-center py-4 text-gray-600">No transactions this month.</td></tr>`;
         }
 
         function renderCycleCard(idPrefix, cycle, badgeText) {
             document.getElementById(`${idPrefix}-dates`).innerText = `${formatDate(cycle.start)} - ${formatDate(cycle.end)}`;
-            
-            // Identify Income for this cycle (Approximate: Day 1 or Day 2 of start month?)
             const cycleIncome = state.settings.income / 2;
             document.getElementById(`${idPrefix}-income`).innerText = formatCurrency(cycleIncome);
 
             const listEl = document.getElementById(`${idPrefix}-list`);
-            
-            // Find bills falling in this cycle
             let items = [];
             state.bills.forEach(bill => {
-                const occurrences = getBillOccurrencesInCycle(bill, cycle);
-                items.push(...occurrences);
+                items.push(...getBillOccurrencesInCycle(bill, cycle));
             });
-
             items.sort((a,b) => new Date(a.date) - new Date(b.date));
 
-            // Calculate Total Pending Bills for this Cycle
             const totalPending = items.filter(i => !i.isPaid).reduce((acc, curr) => acc + curr.amount, 0);
             const pendingEl = document.getElementById(`${idPrefix}-pending`);
             if(pendingEl) pendingEl.innerText = formatCurrency(totalPending);
@@ -567,7 +608,10 @@
                     <div class="flex justify-between items-center text-sm p-2 rounded mb-1 ${item.isPaid ? 'opacity-40' : 'hover:bg-gray-800/50'}">
                         <div class="flex items-center gap-2">
                             <span class="text-gray-500 text-xs w-12 text-right">${formatDateShort(item.date)}</span>
-                            <span class="${item.isPaid ? 'text-gray-500 line-through' : 'text-gray-200'}">${item.name}</span>
+                            <div class="flex flex-col">
+                                <span class="${item.isPaid ? 'text-gray-500 line-through' : 'text-gray-200'}">${item.name}</span>
+                                <span class="text-[9px] text-gray-500">${item.counter}</span>
+                            </div>
                         </div>
                         <div class="flex items-center gap-2">
                             <span class="${item.isPaid ? 'text-gray-600' : 'text-gray-300'}">${formatCurrency(item.amount)}</span>
@@ -581,47 +625,56 @@
         function getBillOccurrencesInCycle(bill, cycle) {
             const res = [];
             const check = (d) => {
-                // Construct actual date object for this due day within the cycle's month(s)
                 let candidates = [];
-                // Case 1: Due day in Start Month
                 let date1 = new Date(cycle.start.getFullYear(), cycle.start.getMonth(), d);
-                // Case 2: Due day in End Month (if different)
                 let date2 = new Date(cycle.end.getFullYear(), cycle.end.getMonth(), d);
 
-                // Add valid dates
                 if (date1 >= cycle.start && date1 <= cycle.end) candidates.push(date1);
                 else if (date2 >= cycle.start && date2 <= cycle.end && date2.getTime() !== date1.getTime()) candidates.push(date2);
                 
                 candidates.forEach(dateObj => {
-                    // STRICT START/END DATE CHECK
-                    // 1. Start Date Check
                     if (bill.startDate) {
-                        // Parse start date as local date (YYYY, MM-1, DD) to match dateObj
                         const [sy, sm, sd] = bill.startDate.split('-').map(Number);
-                        const sDate = new Date(sy, sm-1, sd);
-                        // Compare: If candidate is BEFORE start date, skip
-                        if (dateObj < sDate) return;
+                        if (dateObj < new Date(sy, sm-1, sd)) return;
                     }
-                    
-                    // 2. End Date Check
                     if (bill.endDate) {
                         const [ey, em, ed] = bill.endDate.split('-').map(Number);
-                        const eDate = new Date(ey, em-1, ed);
-                        // Compare: If candidate is AFTER end date, skip
-                        if (dateObj > eDate) return;
+                        if (dateObj > new Date(ey, em-1, ed)) return;
                     }
 
-                    // FIX: Use local date formatting instead of toISOString()
                     const dateStr = toLocalISOString(dateObj);
                     const paid = isPaidForDate(bill.id, dateStr);
                     const total = bill.amount + (bill.arrears || 0);
+                    
+                    // Calculate accurate Counter based on Occurrence Date
+                    let counterStr = '';
+                    if (bill.frequency !== 'one-time' && bill.startDate) {
+                        const [sy, sm, sd] = bill.startDate.split('-').map(Number);
+                        const start = new Date(sy, sm-1, sd);
+                        // Difference in months
+                        const monthsDiff = (dateObj.getFullYear() - start.getFullYear()) * 12 + (dateObj.getMonth() - start.getMonth());
+                        let count = monthsDiff + 1;
+                        if (count < 1) count = 1;
+                        
+                        if(bill.frequency === 'semi-monthly') counterStr = `Month #${count}`;
+                        else counterStr = `Payment #${count}`;
+                        
+                        if(bill.endDate) {
+                             const [ey, em, ed] = bill.endDate.split('-').map(Number);
+                             const end = new Date(ey, em-1, ed);
+                             const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
+                             counterStr += ` of ${totalMonths}`;
+                        }
+                    }
+
                     res.push({
                         id: bill.id,
                         name: bill.name,
                         amount: total,
                         arrears: bill.arrears || 0,
                         date: dateStr,
-                        isPaid: paid
+                        isPaid: paid,
+                        counter: counterStr
                     });
                 });
             };
@@ -635,42 +688,38 @@
                     if(d >= cycle.start && d <= cycle.end) {
                          const dateStr = bill.startDate;
                          const paid = isPaidForDate(bill.id, dateStr); 
-                         res.push({ id: bill.id, name: bill.name, amount: bill.amount, date: dateStr, isPaid: paid, arrears: 0 });
+                         res.push({ id: bill.id, name: bill.name, amount: bill.amount, date: dateStr, isPaid: paid, arrears: 0, counter: 'Single Payment' });
                     }
                  }
             }
             return res;
         }
 
-        // 2. FORECAST (Group by Payout Date)
+        // 2. FORECAST
         window.renderForecast = function() {
             const container = document.getElementById('forecast-container');
             container.innerHTML = '';
-            
-            // Generate next 3 months of cycles
-            let currentCycleStart = new Date();
-            currentCycleStart.setDate(1); // Start from beginning of this month to catch current cycles
-            
-            let tempCycles = [];
             let pointer = new Date();
+            // Backtrack to start of active cycle to ensure we show current
+            const activeStart = getPayoutCycles(pointer).active.start;
+            pointer = activeStart;
+
+            let tempCycles = [];
             for(let i=0; i<6; i++) {
                 const cycles = getPayoutCycles(pointer);
                 if(!tempCycles.some(c => c.start.getTime() === cycles.active.start.getTime())) tempCycles.push(cycles.active);
                 pointer = new Date(cycles.active.end);
-                pointer.setDate(pointer.getDate() + 2); // Jump into next
+                pointer.setDate(pointer.getDate() + 2); 
             }
 
             tempCycles.forEach(cycle => {
-                // Header: Payout Date (Cycle Start)
                 const payoutDateStr = formatDate(cycle.start);
-                
-                // Get Bills
                 let items = [];
                 state.bills.forEach(b => items.push(...getBillOccurrencesInCycle(b, cycle)));
                 items.sort((a,b) => new Date(a.date) - new Date(b.date));
 
                 const totalOut = items.reduce((s,i) => s + i.amount, 0);
-                const income = state.settings.income / 2; // Est
+                const income = state.settings.income / 2; 
                 const net = income - totalOut;
 
                 container.innerHTML += `
@@ -693,7 +742,10 @@
                                 <div class="flex items-center justify-between p-2 rounded ${item.isPaid ? 'opacity-30' : 'bg-gray-800/40'} text-xs">
                                     <div class="flex items-center gap-2">
                                         <div class="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                                        <div class="truncate w-24">${item.name}</div>
+                                        <div class="flex flex-col">
+                                            <span class="truncate w-24">${item.name}</span>
+                                            <span class="text-[9px] text-gray-500">${item.counter}</span>
+                                        </div>
                                     </div>
                                     <div class="text-right">
                                         <div class="text-gray-300">${formatCurrency(item.amount)}</div>
@@ -715,12 +767,10 @@
             const today = new Date();
             const cycles = getPayoutCycles(today); 
             
-            // Get Toolbar Values
             const search = document.getElementById('bills-search').value.toLowerCase();
             const filter = document.getElementById('bills-filter').value;
             const sort = document.getElementById('bills-sort').value;
 
-            // Filter & Sort
             let displayBills = state.bills.filter(b => {
                 const matchesSearch = b.name.toLowerCase().includes(search);
                 const matchesFilter = filter === 'all' || b.frequency === filter;
@@ -731,24 +781,16 @@
                 if (sort === 'name') return a.name.localeCompare(b.name);
                 if (sort === 'amount-desc') return b.amount - a.amount;
                 if (sort === 'amount-asc') return a.amount - b.amount;
-                
                 if (sort === 'due-date') {
-                    // Helper to find the next specific date for a bill
                     const getNextDate = (bill) => {
-                        // Check Active Cycle first
                         let occs = getBillOccurrencesInCycle(bill, cycles.active);
-                        // If not in active (e.g. paid or passed), check Next Cycle
                         if (!occs.length) occs = getBillOccurrencesInCycle(bill, cycles.next);
-                        
-                        // Return first date found, or far future if none
                         if (occs.length > 0) {
-                            // Sort occurrences by date just in case (for semi-monthly)
                             occs.sort((x, y) => new Date(x.date) - new Date(y.date));
                             return new Date(occs[0].date);
                         }
                         return new Date(9999, 11, 31); 
                     };
-                    
                     return getNextDate(a) - getNextDate(b);
                 }
                 return 0;
@@ -764,31 +806,18 @@
                 const total = bill.amount + arrears;
                 
                 if(bill.frequency === 'one-time') {
-                   // Local ISO String fix applied globally, using string comparison safely here
                    if(bill.endDate && new Date(bill.endDate) < new Date(today.getFullYear(), today.getMonth(), 1)) return ''; 
                 }
 
-                // ... existing counter logic ...
-                let counterStr = '';
-                if (bill.frequency !== 'one-time' && bill.startDate) {
-                    const start = new Date(bill.startDate);
-                    const now = new Date();
-                    const monthsPassed = (now.getFullYear() - start.getFullYear()) * 12 + (now.getMonth() - start.getMonth());
-                    let currentTerm = monthsPassed + 1; 
-                    if (currentTerm < 1) currentTerm = 1; 
-                    if (bill.frequency === 'semi-monthly') counterStr = `Month #${currentTerm}`;
-                    else counterStr = `Payment #${currentTerm}`;
-                    if(bill.endDate) {
-                         const end = new Date(bill.endDate);
-                         const totalMonths = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth()) + 1;
-                         counterStr += ` of ${totalMonths}`;
-                     }
-                } else if (bill.frequency === 'one-time') counterStr = "Single Payment";
-
-                // ... existing actions generation ...
+                // Find occurences for Actions
                 const occurrences = getBillOccurrencesInCycle(bill, cycles.active);
                 let activeOccs = occurrences.length ? occurrences : getBillOccurrencesInCycle(bill, cycles.next);
+                // Sort earliest first
+                activeOccs.sort((a,b) => new Date(a.date) - new Date(b.date));
                 
+                // Counter logic for display based on first active occurrence
+                let counterStr = activeOccs.length ? activeOccs[0].counter : '';
+
                 let actions = activeOccs.map(occ => {
                     if(occ.isPaid) return `<button class="w-full py-2 bg-green-900/20 text-green-400 border border-green-900/50 rounded-lg text-xs font-bold mb-2 cursor-default"><i class="fa-solid fa-check"></i> Paid ${formatDateShort(occ.date)}</button>`;
                     return `
@@ -824,42 +853,79 @@
 
         // --- TRANSACTIONS ---
         window.triggerTransaction = function(type, refId, date, amt, title, isPaid, ledgerId, arrears, targetDate) {
-            if(isPaid) return; // Undo logic requires complex id lookup, simplified here to just Pay
+            if(isPaid) return; 
             document.getElementById('trans-modal-title').innerText = type==='income'?'Income':'Pay Bill';
             document.getElementById('trans-modal-desc').innerText = title;
             document.getElementById('trans-type').value = type;
             document.getElementById('trans-ref-id').value = refId;
-            document.getElementById('trans-date').value = date; // Default payment date = due date
-            document.getElementById('trans-target-date').value = targetDate || date; // IMPORTANT: The bill's due date
+            document.getElementById('trans-date').value = date; 
+            document.getElementById('trans-target-date').value = targetDate || date;
             document.getElementById('trans-amount').value = amt;
+            document.getElementById('trans-expected-amt').value = amt; // Save expected
             document.getElementById('trans-arrears-amt').value = arrears||0;
             
-            // Open
             document.getElementById('modal-transaction').classList.remove('hidden');
             document.getElementById('modal-transaction').classList.add('flex');
         }
 
         window.confirmTransaction = async function() {
-            const data = {
-                type: document.getElementById('trans-type').value,
-                amount: parseFloat(document.getElementById('trans-amount').value),
-                date: document.getElementById('trans-date').value,
-                targetDate: document.getElementById('trans-target-date').value, // Save Due Date
-                refId: document.getElementById('trans-ref-id').value,
-                description: document.getElementById('trans-modal-desc').innerText,
-                isPaid: true,
-                createdAt: new Date().toISOString()
-            };
+            const type = document.getElementById('trans-type').value;
+            const refId = document.getElementById('trans-ref-id').value;
+            const paidAmount = parseFloat(document.getElementById('trans-amount').value);
+            const expectedAmount = parseFloat(document.getElementById('trans-expected-amt').value);
+            const date = document.getElementById('trans-date').value;
             
-            if(!data.amount || !data.date) return;
+            if(!paidAmount || !date) return;
 
             try {
-                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), data);
-                // Clear arrears if paying bill
-                const arr = parseFloat(document.getElementById('trans-arrears-amt').value);
-                if(data.type === 'bill' && arr > 0) {
-                     await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', data.refId), { arrears: 0 }, { merge: true });
+                let arrearsToAdd = 0;
+                let description = document.getElementById('trans-modal-desc').innerText.replace('Confirming: ', '');
+
+                // Partial Payment Logic
+                if (type === 'bill' && paidAmount < expectedAmount) {
+                    const diff = expectedAmount - paidAmount;
+                    // Only trigger if significant difference
+                    if (diff > 1) {
+                        if(confirm(`Partial Payment Detected.\n\nExpected: ${expectedAmount}\nPaying: ${paidAmount}\n\nThe remaining ${diff} will be added to Arrears. Proceed?`)) {
+                            arrearsToAdd = diff;
+                            description += ` (Partial)`;
+                        } else return; // Cancel
+                    }
                 }
+
+                // Add Ledger Entry
+                await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
+                    type: type,
+                    amount: paidAmount,
+                    date: date,
+                    targetDate: document.getElementById('trans-target-date').value,
+                    refId: refId,
+                    description: description,
+                    isPaid: true,
+                    createdAt: new Date().toISOString()
+                });
+                
+                // Handle Bill State Update
+                if (type === 'bill') {
+                    // If we had existing arrears, we assume they are cleared by this payment UNLESS it's partial.
+                    // New Arrears = (Old Arrears cleared? 0) + (New Arrears from Partial)
+                    // Simplified: If full payment, arrears = 0. If partial, arrears = remaining.
+                    // NOTE: 'expectedAmount' already included the old 'arrears' (it was passed as total).
+                    // So if we pay less than total, the remainder becomes the new arrears.
+                    
+                    const oldArrears = parseFloat(document.getElementById('trans-arrears-amt').value);
+                    // Logic: totalDue = base + oldArrears.
+                    // If paidAmount >= totalDue, newArrears = 0.
+                    // If paidAmount < totalDue, newArrears = totalDue - paidAmount.
+                    
+                    let finalArrears = 0;
+                    if (paidAmount < expectedAmount) {
+                        finalArrears = expectedAmount - paidAmount;
+                    }
+                    
+                    await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', refId), { arrears: finalArrears }, { merge: true });
+                }
+
                 closeModal('modal-transaction');
             } catch(e) { console.error(e); alert('Error saving'); }
         }
@@ -881,7 +947,6 @@
         window.openExpenseModal = () => {
              document.getElementById('expense-id').value=''; setExpenseType('manual');
              document.getElementById('expense-amount').value=''; document.getElementById('expense-desc').value='';
-             // FIX: Use local ISO string for default date
              document.getElementById('expense-date').value = toLocalISOString(new Date());
              openModal('modal-expense');
         }
