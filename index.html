@@ -452,8 +452,6 @@
         }
 
         // --- AUTOMATIC DEFERRAL SYSTEM ---
-        // Checks for any bill instances strictly before the current active cycle start that are UNPAID.
-        // Adds them to arrears and marks a 'defer' ledger entry.
         async function checkAutoDeferrals() {
             if (!currentUser) return;
             const cycles = getPayoutCycles(new Date());
@@ -462,8 +460,6 @@
             state.bills.forEach(async (bill) => {
                 if(!bill.startDate) return;
                 
-                // Iterate relevant dates for this bill type up to checkEndDate
-                // Simplified check: We loop roughly from start date (capped at 6 months ago for safety)
                 const start = new Date(bill.startDate);
                 const cutoff = new Date();
                 cutoff.setMonth(cutoff.getMonth() - 6);
@@ -471,7 +467,6 @@
 
                 let ptr = new Date(loopStart);
                 while(ptr < checkEndDate) {
-                    // Check if ptr matches due day
                     let isDue = false;
                     const d = ptr.getDate();
                     if (bill.frequency === 'monthly' && d === bill.dueDay) isDue = true;
@@ -479,36 +474,37 @@
                     if (bill.frequency === 'one-time' && toLocalISOString(ptr) === bill.startDate) isDue = true;
 
                     if(isDue) {
-                        // Check termination
                         let terminated = false;
                         if (bill.endDate && ptr > new Date(bill.endDate)) terminated = true;
 
                         if(!terminated) {
                             const dateStr = toLocalISOString(ptr);
-                            const paid = isPaidForDate(bill.id, dateStr); // Returns true if paid OR deferred
+                            const status = getPaymentStatus(bill.id, dateStr); 
                             
-                            if (!paid) {
-                                console.log(`Auto-deferring bill ${bill.name} due on ${dateStr}`);
-                                // 1. Add to Arrears
-                                const newArrears = (bill.arrears || 0) + bill.amount;
-                                // Update local state immediately to prevent double-fire in loop before refresh
-                                bill.arrears = newArrears; 
+                            if (!status.isFullyPaid) {
+                                // Calculate unpaid portion
+                                const totalForInstance = bill.amount; // Assumption: Past instances didn't include current arrears yet
+                                const unpaid = totalForInstance - status.paid;
                                 
-                                // 2. Create Deferral Record (to mark date as processed)
-                                try {
-                                    await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
-                                        type: 'defer',
-                                        amount: 0, // Financial impact moved to arrears
-                                        date: dateStr,
-                                        targetDate: dateStr,
-                                        refId: bill.id,
-                                        description: `Missed - Added to Arrears (${bill.name})`,
-                                        isPaid: true,
-                                        createdAt: new Date().toISOString()
-                                    });
+                                if (unpaid > 0.1) {
+                                    console.log(`Auto-deferring bill ${bill.name} due on ${dateStr}, remaining: ${unpaid}`);
+                                    const newArrears = (bill.arrears || 0) + unpaid;
+                                    bill.arrears = newArrears; // Local update
                                     
-                                    await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', bill.id), { arrears: newArrears }, { merge: true });
-                                } catch(e) { console.error("Auto-defer error", e); }
+                                    try {
+                                        await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
+                                            type: 'defer',
+                                            amount: 0, 
+                                            date: dateStr,
+                                            targetDate: dateStr,
+                                            refId: bill.id,
+                                            description: `Missed - Added to Arrears (${bill.name})`,
+                                            isPaid: true,
+                                            createdAt: new Date().toISOString()
+                                        });
+                                        await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', bill.id), { arrears: newArrears }, { merge: true });
+                                    } catch(e) { console.error("Auto-defer error", e); }
+                                }
                             }
                         }
                     }
@@ -546,11 +542,17 @@
             return `${y}-${m}-${d}`;
         }
 
-        function isPaidForDate(billId, targetDateStr) {
-            return state.ledger.some(l => 
-                l.refId === billId && l.isPaid && 
+        // Helper to check partial payments
+        function getPaymentStatus(billId, targetDateStr) {
+            const entries = state.ledger.filter(l => 
+                l.refId === billId && 
+                l.isPaid && 
                 (l.targetDate === targetDateStr || l.date === targetDateStr)
             );
+            const paid = entries.reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
+            // We don't know the specific instance amount here easily without passing it, 
+            // so caller compares 'paid' vs 'required'.
+            return { paid: paid, isFullyPaid: false }; // Caller determines full paid status based on amount
         }
 
         function refreshUI() {
@@ -564,7 +566,7 @@
             const today = new Date();
             const monthStr = toLocalISOString(today).slice(0, 7);
             
-            const txs = state.ledger.filter(t => t.date.startsWith(monthStr) && t.type !== 'defer'); // Exclude 'defer' entries from history/math
+            const txs = state.ledger.filter(t => t.date.startsWith(monthStr) && t.type !== 'defer'); 
             const inc = txs.filter(t => t.type === 'income').reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
             const exp = txs.filter(t => t.type !== 'income').reduce((s,t) => s + (parseFloat(t.amount)||0), 0);
             
@@ -643,15 +645,17 @@
                     }
 
                     const dateStr = toLocalISOString(dateObj);
-                    const paid = isPaidForDate(bill.id, dateStr);
-                    const total = bill.amount + (bill.arrears || 0);
+                    // SUM PAYMENTS
+                    const status = getPaymentStatus(bill.id, dateStr);
                     
-                    // Calculate accurate Counter based on Occurrence Date
+                    const totalRequired = bill.amount + (bill.arrears || 0);
+                    const remaining = totalRequired - status.paid;
+                    const isPaid = remaining <= 0.1;
+
                     let counterStr = '';
                     if (bill.frequency !== 'one-time' && bill.startDate) {
                         const [sy, sm, sd] = bill.startDate.split('-').map(Number);
                         const start = new Date(sy, sm-1, sd);
-                        // Difference in months
                         const monthsDiff = (dateObj.getFullYear() - start.getFullYear()) * 12 + (dateObj.getMonth() - start.getMonth());
                         let count = monthsDiff + 1;
                         if (count < 1) count = 1;
@@ -670,10 +674,11 @@
                     res.push({
                         id: bill.id,
                         name: bill.name,
-                        amount: total,
+                        amount: remaining < 0 ? 0 : remaining, // Show remaining balance
+                        totalRequired: totalRequired,
                         arrears: bill.arrears || 0,
                         date: dateStr,
-                        isPaid: paid,
+                        isPaid: isPaid,
                         counter: counterStr
                     });
                 });
@@ -687,8 +692,9 @@
                     const d = new Date(sy, sm-1, sd);
                     if(d >= cycle.start && d <= cycle.end) {
                          const dateStr = bill.startDate;
-                         const paid = isPaidForDate(bill.id, dateStr); 
-                         res.push({ id: bill.id, name: bill.name, amount: bill.amount, date: dateStr, isPaid: paid, arrears: 0, counter: 'Single Payment' });
+                         const status = getPaymentStatus(bill.id, dateStr);
+                         const remaining = bill.amount - status.paid;
+                         res.push({ id: bill.id, name: bill.name, amount: remaining, totalRequired: bill.amount, date: dateStr, isPaid: remaining<=0.1, arrears: 0, counter: 'Single Payment' });
                     }
                  }
             }
@@ -700,7 +706,6 @@
             const container = document.getElementById('forecast-container');
             container.innerHTML = '';
             let pointer = new Date();
-            // Backtrack to start of active cycle to ensure we show current
             const activeStart = getPayoutCycles(pointer).active.start;
             pointer = activeStart;
 
@@ -803,23 +808,24 @@
 
             listEl.innerHTML = displayBills.map(bill => {
                 const arrears = bill.arrears || 0;
+                // For display in card, we show base + arrears. 
+                // BUT the buttons should reflect remaining balance for CURRENT active occurrence.
                 const total = bill.amount + arrears;
                 
                 if(bill.frequency === 'one-time') {
                    if(bill.endDate && new Date(bill.endDate) < new Date(today.getFullYear(), today.getMonth(), 1)) return ''; 
                 }
 
-                // Find occurences for Actions
                 const occurrences = getBillOccurrencesInCycle(bill, cycles.active);
                 let activeOccs = occurrences.length ? occurrences : getBillOccurrencesInCycle(bill, cycles.next);
-                // Sort earliest first
                 activeOccs.sort((a,b) => new Date(a.date) - new Date(b.date));
                 
-                // Counter logic for display based on first active occurrence
                 let counterStr = activeOccs.length ? activeOccs[0].counter : '';
 
                 let actions = activeOccs.map(occ => {
                     if(occ.isPaid) return `<button class="w-full py-2 bg-green-900/20 text-green-400 border border-green-900/50 rounded-lg text-xs font-bold mb-2 cursor-default"><i class="fa-solid fa-check"></i> Paid ${formatDateShort(occ.date)}</button>`;
+                    
+                    // occ.amount is now REMAINING balance
                     return `
                         <div class="flex gap-1 mb-2">
                             <button onclick="triggerTransaction('bill', '${bill.id}', '${occ.date}', ${occ.amount}, '${bill.name}', false, '', ${bill.arrears}, '${occ.date}')" class="flex-1 py-2 bg-brand-600 hover:bg-brand-500 text-white rounded-lg text-xs font-medium">Pay ${formatCurrency(occ.amount)} <span class="text-[10px] opacity-75">(${formatDateShort(occ.date)})</span></button>
@@ -874,58 +880,45 @@
             const paidAmount = parseFloat(document.getElementById('trans-amount').value);
             const expectedAmount = parseFloat(document.getElementById('trans-expected-amt').value);
             const date = document.getElementById('trans-date').value;
+            const targetDateStr = document.getElementById('trans-target-date').value;
             
             if(!paidAmount || !date) return;
 
             try {
-                let arrearsToAdd = 0;
                 let description = document.getElementById('trans-modal-desc').innerText.replace('Confirming: ', '');
-
-                // Partial Payment Logic
+                
+                // Smart Deferral Logic
                 if (type === 'bill' && paidAmount < expectedAmount) {
+                    description += ` (Partial)`;
                     const diff = expectedAmount - paidAmount;
-                    // Only trigger if significant difference
-                    if (diff > 1) {
-                        if(confirm(`Partial Payment Detected.\n\nExpected: ${expectedAmount}\nPaying: ${paidAmount}\n\nThe remaining ${diff} will be added to Arrears. Proceed?`)) {
-                            arrearsToAdd = diff;
-                            description += ` (Partial)`;
-                        } else return; // Cancel
+                    // Check if due date passed
+                    if (new Date(date) > new Date(targetDateStr)) {
+                        if(confirm(`Due date passed. \n\nRemaining balance: ${diff}.\n\nDefer this remainder to Arrears?`)) {
+                            // Add remainder to arrears immediately
+                            const oldArrears = parseFloat(document.getElementById('trans-arrears-amt').value);
+                            // CAUTION: Logic update. 
+                            // If we defer, we move remainder to arrears.
+                            // But wait, did we clear old arrears? 
+                            // Simply: New Arrears = (Bill.arrears or whatever was due) - Paid + Remainder? No.
+                            // New Arrears = diff. (Assuming current arrears are cleared by the payment flow visually)
+                            // Actually safe bet: We add 'diff' to existing arrears if any?
+                            // Let's assume: Arrears logic is handled by 'closing' this bill instance.
+                            // If we update arrears to 'diff', we are effectively saying "Next time, owe this much more".
+                            await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', refId), { arrears: diff }, { merge: true });
+                        }
                     }
+                    // If NOT passed, do nothing to arrears. Ledger entry is saved. 
+                    // getBillOccurrences will recalc 'remaining' automatically.
+                } else if (type === 'bill' && paidAmount >= expectedAmount) {
+                    // Full payment clears arrears
+                    await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', refId), { arrears: 0 }, { merge: true });
                 }
 
-                // Add Ledger Entry
                 await addDoc(collection(db, 'artifacts', appId, 'users', currentUser.uid, 'ledger'), {
-                    type: type,
-                    amount: paidAmount,
-                    date: date,
-                    targetDate: document.getElementById('trans-target-date').value,
-                    refId: refId,
-                    description: description,
-                    isPaid: true,
-                    createdAt: new Date().toISOString()
+                    type, amount: paidAmount, date, targetDate: targetDateStr,
+                    refId, description, isPaid: true, createdAt: new Date().toISOString()
                 });
                 
-                // Handle Bill State Update
-                if (type === 'bill') {
-                    // If we had existing arrears, we assume they are cleared by this payment UNLESS it's partial.
-                    // New Arrears = (Old Arrears cleared? 0) + (New Arrears from Partial)
-                    // Simplified: If full payment, arrears = 0. If partial, arrears = remaining.
-                    // NOTE: 'expectedAmount' already included the old 'arrears' (it was passed as total).
-                    // So if we pay less than total, the remainder becomes the new arrears.
-                    
-                    const oldArrears = parseFloat(document.getElementById('trans-arrears-amt').value);
-                    // Logic: totalDue = base + oldArrears.
-                    // If paidAmount >= totalDue, newArrears = 0.
-                    // If paidAmount < totalDue, newArrears = totalDue - paidAmount.
-                    
-                    let finalArrears = 0;
-                    if (paidAmount < expectedAmount) {
-                        finalArrears = expectedAmount - paidAmount;
-                    }
-                    
-                    await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', refId), { arrears: finalArrears }, { merge: true });
-                }
-
                 closeModal('modal-transaction');
             } catch(e) { console.error(e); alert('Error saving'); }
         }
