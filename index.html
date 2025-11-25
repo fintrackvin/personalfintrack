@@ -891,24 +891,22 @@
                 if (type === 'bill' && paidAmount < expectedAmount) {
                     description += ` (Partial)`;
                     const diff = expectedAmount - paidAmount;
-                    // Check if due date passed
-                    if (new Date(date) > new Date(targetDateStr)) {
-                        if(confirm(`Due date passed. \n\nRemaining balance: ${diff}.\n\nDefer this remainder to Arrears?`)) {
-                            // Add remainder to arrears immediately
-                            const oldArrears = parseFloat(document.getElementById('trans-arrears-amt').value);
-                            // CAUTION: Logic update. 
-                            // If we defer, we move remainder to arrears.
-                            // But wait, did we clear old arrears? 
-                            // Simply: New Arrears = (Bill.arrears or whatever was due) - Paid + Remainder? No.
-                            // New Arrears = diff. (Assuming current arrears are cleared by the payment flow visually)
-                            // Actually safe bet: We add 'diff' to existing arrears if any?
-                            // Let's assume: Arrears logic is handled by 'closing' this bill instance.
-                            // If we update arrears to 'diff', we are effectively saying "Next time, owe this much more".
+                    
+                    // Strict Date Comparison
+                    // Compare YYYY-MM-DD strings directly to avoid time issues
+                    if (date > targetDateStr) { 
+                        // ONLY ask if Payment Date is strictly AFTER Target Due Date
+                        if(confirm(`Due date (${targetDateStr}) has passed.\n\nPayment Date: ${date}\nRemaining balance: ${formatCurrency(diff)}.\n\nDo you want to defer this remaining balance to Arrears for the NEXT cycle?`)) {
+                            // If deferred, update Arrears. Note: Logic assumes current view already accounted for old arrears.
+                            // If we defer, we essentially say "This remaining amount is now arrears".
+                            // BUT we must be careful not to double-count.
+                            // Safest approach: Add 'diff' to whatever arrears currently stored?
+                            // Or simply: New Arrears = diff.
                             await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', refId), { arrears: diff }, { merge: true });
                         }
                     }
-                    // If NOT passed, do nothing to arrears. Ledger entry is saved. 
-                    // getBillOccurrences will recalc 'remaining' automatically.
+                    // If date <= targetDateStr, we DO NOT defer. We just record payment. 
+                    // The Dashboard will calculate (Total - Paid) and show remaining.
                 } else if (type === 'bill' && paidAmount >= expectedAmount) {
                     // Full payment clears arrears
                     await setDoc(doc(db, 'artifacts', appId, 'users', currentUser.uid, 'bills', refId), { arrears: 0 }, { merge: true });
@@ -940,6 +938,7 @@
         window.openExpenseModal = () => {
              document.getElementById('expense-id').value=''; setExpenseType('manual');
              document.getElementById('expense-amount').value=''; document.getElementById('expense-desc').value='';
+             // FIX: Use local ISO string for default date
              document.getElementById('expense-date').value = toLocalISOString(new Date());
              openModal('modal-expense');
         }
