@@ -133,7 +133,7 @@
                     
                     <div class="bg-gray-900/50 rounded-lg p-3 mb-3 space-y-2">
                         <div class="flex justify-between items-center">
-                            <span class="text-xs text-gray-400">Est. Income</span>
+                            <span class="text-xs text-gray-400" id="cycle-active-income-label">Est. Income</span>
                             <span class="text-sm font-bold text-green-400" id="cycle-active-income">₱0.00</span>
                         </div>
                         <div class="flex justify-between items-center border-t border-gray-800 pt-2">
@@ -158,7 +158,7 @@
                 </div>
                 <div class="bg-gray-900/50 rounded-lg p-3 mb-3 space-y-2">
                     <div class="flex justify-between items-center">
-                        <span class="text-xs text-gray-400">Projected Income</span>
+                        <span class="text-xs text-gray-400" id="cycle-next-income-label">Projected Income</span>
                         <span class="text-sm font-bold text-green-400" id="cycle-next-income">₱0.00</span>
                     </div>
                     <div class="flex justify-between items-center border-t border-gray-800 pt-2">
@@ -589,6 +589,22 @@
             return { paid: paid, isFullyPaid: false }; 
         }
 
+        // NEW: Get Actual Income for a specific cycle start date
+        function getCycleIncome(cycle) {
+            const d = cycle.start;
+            const day = d.getDate();
+            const monthStr = toLocalISOString(d).slice(0, 7); 
+            let idx = -1;
+            if (day === state.settings.day1) idx = 0; else if (day === state.settings.day2) idx = 1;
+            
+            if (idx !== -1) {
+                const idBase = `income_${monthStr}_${idx}`;
+                const entry = state.ledger.find(l => l.refId === idBase && l.type === 'income');
+                if (entry) return { amount: entry.amount, isActual: true };
+            }
+            return { amount: state.settings.income / 2, isActual: false };
+        }
+
         function refreshUI() {
             renderDashboard();
             renderBills();
@@ -651,7 +667,20 @@
 
         function renderCycleCard(idPrefix, cycle) {
             document.getElementById(`${idPrefix}-dates`).innerText = `${formatDate(cycle.start)} - ${formatDate(cycle.end)}`;
-            document.getElementById(`${idPrefix}-income`).innerText = formatCurrency(state.settings.income / 2);
+            
+            // Dynamic Income Display
+            const incData = getCycleIncome(cycle);
+            const incEl = document.getElementById(`${idPrefix}-income`);
+            incEl.innerText = formatCurrency(incData.amount);
+            const incLbl = document.getElementById(`${idPrefix}-income-label`);
+            if(incLbl) {
+                if(incData.isActual) {
+                    incLbl.innerHTML = `<span class="text-green-400"><i class="fa-solid fa-check-circle"></i> Actual Income</span>`;
+                } else {
+                    incLbl.innerHTML = `Est. Income`;
+                }
+            }
+
             const listEl = document.getElementById(`${idPrefix}-list`);
             let items = [];
             state.bills.forEach(bill => { items.push(...getBillOccurrencesInCycle(bill, cycle)); });
@@ -798,9 +827,21 @@
             let pointer = new Date(); const activeStart = getPayoutCycles(pointer).active.start; pointer = activeStart;
             let tempCycles = []; for(let i=0; i<6; i++) { const cycles = getPayoutCycles(pointer); if(!tempCycles.some(c => c.start.getTime() === cycles.active.start.getTime())) tempCycles.push(cycles.active); pointer = new Date(cycles.active.end); pointer.setDate(pointer.getDate() + 2); }
             tempCycles.forEach(cycle => {
-                const payoutDateStr = formatDate(cycle.start); let items = []; state.bills.forEach(b => items.push(...getBillOccurrencesInCycle(b, cycle))); items.sort((a,b) => new Date(a.date) - new Date(b.date));
-                const totalOut = items.reduce((s,i) => s + i.amount, 0); const income = state.settings.income / 2; const net = income - totalOut;
-                container.innerHTML += `<div class="glass-panel rounded-2xl border border-gray-800 flex flex-col h-full relative overflow-hidden"><div class="p-4 border-b border-gray-800 bg-gray-900/50"><div class="flex justify-between items-center mb-1"><h4 class="font-bold text-white text-sm">Payout: ${payoutDateStr}</h4><span class="text-xs ${net>=0?'text-green-400':'text-red-400'}">${formatCurrency(net)}</span></div><div class="flex justify-between text-[10px] text-gray-500"><span>Range: ${formatDateShort(cycle.start)} - ${formatDateShort(cycle.end)}</span></div></div><div class="flex-1 overflow-y-auto p-4 space-y-2"><div class="flex justify-between text-xs mb-2 pb-2 border-b border-gray-800"><span class="text-green-400 font-medium">Est. Income</span><span class="text-green-400">${formatCurrency(income)}</span></div>${items.map(item => `<div class="flex items-center justify-between p-2 rounded ${item.isPaid ? 'opacity-30' : 'bg-gray-800/40'} text-xs"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-red-500"></div><div class="flex flex-col"><span class="truncate w-24">${item.name}</span><span class="text-[9px] text-gray-500">${item.counter}</span></div></div><div class="text-right"><div class="text-gray-300">${formatCurrency(item.amount)}</div><div class="text-[9px] text-gray-600">${formatDateShort(item.date)}</div></div></div>`).join('')}</div></div>`;
+                const payoutDateStr = formatDate(cycle.start); 
+                let items = []; 
+                state.bills.forEach(b => items.push(...getBillOccurrencesInCycle(b, cycle))); 
+                items.sort((a,b) => new Date(a.date) - new Date(b.date));
+                
+                // Calculate Dynamic Income for Forecast Card
+                const incData = getCycleIncome(cycle);
+                const totalOut = items.reduce((s,i) => s + i.amount, 0); 
+                const income = incData.amount; 
+                const net = income - totalOut;
+                
+                const incomeClass = incData.isActual ? "text-green-400 font-bold" : "text-gray-400";
+                const incomeLabel = incData.isActual ? "Actual Income" : "Est. Income";
+
+                container.innerHTML += `<div class="glass-panel rounded-2xl border border-gray-800 flex flex-col h-full relative overflow-hidden"><div class="p-4 border-b border-gray-800 bg-gray-900/50"><div class="flex justify-between items-center mb-1"><h4 class="font-bold text-white text-sm">Payout: ${payoutDateStr}</h4><span class="text-xs ${net>=0?'text-green-400':'text-red-400'}">${formatCurrency(net)}</span></div><div class="flex justify-between text-[10px] text-gray-500"><span>Range: ${formatDateShort(cycle.start)} - ${formatDateShort(cycle.end)}</span></div></div><div class="flex-1 overflow-y-auto p-4 space-y-2"><div class="flex justify-between text-xs mb-2 pb-2 border-b border-gray-800"><span class="${incomeClass}">${incomeLabel}</span><span class="${incomeClass}">${formatCurrency(income)}</span></div>${items.map(item => `<div class="flex items-center justify-between p-2 rounded ${item.isPaid ? 'opacity-30' : 'bg-gray-800/40'} text-xs"><div class="flex items-center gap-2"><div class="w-1.5 h-1.5 rounded-full bg-red-500"></div><div class="flex flex-col"><span class="truncate w-24">${item.name}</span><span class="text-[9px] text-gray-500">${item.counter}</span></div></div><div class="text-right"><div class="text-gray-300">${formatCurrency(item.amount)}</div><div class="text-[9px] text-gray-600">${formatDateShort(item.date)}</div></div></div>`).join('')}</div></div>`;
             });
         }
 
