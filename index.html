@@ -612,6 +612,38 @@
             renderGoals();
         }
 
+        // Helper to check if bill is completed (paid up to termination or one-time)
+        function isBillCompleted(bill) {
+            if (bill.frequency === 'one-time') {
+                return state.ledger.some(l => l.refId === bill.id && l.isPaid);
+            }
+            if (bill.endDate) {
+                const end = new Date(bill.endDate);
+                // Check if the *last possible occurrence* is paid
+                // Simplification: If today > endDate AND no unpaid arrears, consider complete.
+                // OR: Check if a payment exists for a date >= endDate (or the last due date before it)
+                
+                // Let's find the last due date
+                let lastDue = new Date(end.getFullYear(), end.getMonth(), bill.dueDay);
+                if (lastDue > end) lastDue.setMonth(lastDue.getMonth() - 1);
+                
+                // If semi-monthly, check both
+                if(bill.frequency === 'semi-monthly' && bill.dueDay2) {
+                    let lastDue2 = new Date(end.getFullYear(), end.getMonth(), bill.dueDay2);
+                    if(lastDue2 > end) lastDue2.setMonth(lastDue2.getMonth() - 1);
+                    if(lastDue2 > lastDue) lastDue = lastDue2;
+                }
+                
+                const dateStr = toLocalISOString(lastDue);
+                // Check if paid for this date
+                const status = getPaymentStatus(bill.id, dateStr);
+                // If paid > 0 (assuming last bill paid), hide it.
+                // Better: Is the Ledger containing a payment for this specific final target date?
+                if (state.ledger.some(l => l.refId === bill.id && l.targetDate === dateStr && l.isPaid)) return true;
+            }
+            return false;
+        }
+
         // 1. DASHBOARD
         window.renderDashboard = function() {
             const today = new Date();
@@ -635,6 +667,7 @@
 
             let urgentCount = 0;
             state.bills.forEach(b => {
+                if(isBillCompleted(b)) return;
                 const occurrences = getBillOccurrencesInCycle(b, cycles.active);
                 occurrences.forEach(occ => { if(!occ.isPaid && toLocalISOString(today) > occ.date) urgentCount++; });
             });
@@ -683,7 +716,9 @@
 
             const listEl = document.getElementById(`${idPrefix}-list`);
             let items = [];
-            state.bills.forEach(bill => { items.push(...getBillOccurrencesInCycle(bill, cycle)); });
+            state.bills.forEach(bill => { 
+                if(!isBillCompleted(bill)) items.push(...getBillOccurrencesInCycle(bill, cycle)); 
+            });
             items.sort((a,b) => new Date(a.date) - new Date(b.date));
             const totalPending = items.filter(i => !i.isPaid).reduce((acc, curr) => acc + curr.amount, 0);
             const pendingEl = document.getElementById(`${idPrefix}-pending`);
@@ -789,11 +824,14 @@
             const search = document.getElementById('bills-search').value.toLowerCase();
             const filter = document.getElementById('bills-filter').value;
             const sort = document.getElementById('bills-sort').value;
+            
             let displayBills = state.bills.filter(b => {
+                if (isBillCompleted(b)) return false; // Hide completed bills
                 const matchesSearch = b.name.toLowerCase().includes(search);
                 const matchesFilter = filter === 'all' || b.frequency === filter;
                 return matchesSearch && matchesFilter;
             });
+            
             displayBills.sort((a, b) => {
                 if (sort === 'name') return a.name.localeCompare(b.name);
                 if (sort === 'amount-desc') return b.amount - a.amount;
@@ -807,9 +845,15 @@
                 }
                 return 0;
             });
+            
+            if(displayBills.length === 0) {
+                listEl.innerHTML = `<div class="col-span-full text-center py-10 text-gray-500 border border-dashed border-gray-800 rounded-xl">No bills match filters.</div>`;
+                return;
+            }
+
             listEl.innerHTML = displayBills.map(bill => {
                 const arrears = bill.arrears || 0; const total = bill.amount + arrears;
-                if(bill.frequency === 'one-time') { if(bill.endDate && new Date(bill.endDate) < new Date(today.getFullYear(), today.getMonth(), 1)) return ''; }
+                // One-time bills handled by isBillCompleted check above
                 const occurrences = getBillOccurrencesInCycle(bill, cycles.active);
                 let activeOccs = occurrences.length ? occurrences : getBillOccurrencesInCycle(bill, cycles.next);
                 activeOccs.sort((a,b) => new Date(a.date) - new Date(b.date));
@@ -829,7 +873,9 @@
             tempCycles.forEach(cycle => {
                 const payoutDateStr = formatDate(cycle.start); 
                 let items = []; 
-                state.bills.forEach(b => items.push(...getBillOccurrencesInCycle(b, cycle))); 
+                state.bills.forEach(b => {
+                    if(!isBillCompleted(b)) items.push(...getBillOccurrencesInCycle(b, cycle));
+                }); 
                 items.sort((a,b) => new Date(a.date) - new Date(b.date));
                 
                 // Calculate Dynamic Income for Forecast Card
