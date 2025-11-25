@@ -225,7 +225,9 @@
                     <i class="fa-solid fa-plus"></i> Add Goal
                 </button>
             </div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="goals-list"></div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="goals-list">
+                <!-- Populated by JS -->
+            </div>
         </div>
 
         <!-- RECEIVABLES VIEW -->
@@ -569,25 +571,29 @@
             unsubscribers.push(onSnapshot(path('settings'), s => {
                 if(!s.empty) state.settings = { ...state.settings, ...s.docs[0].data(), id: s.docs[0].id };
                 refreshUI();
-            }));
+            }, e => { console.error(e); document.getElementById('loading-screen').classList.add('hidden'); }));
+
             unsubscribers.push(onSnapshot(path('bills'), s => {
                 state.bills = s.docs.map(d => ({id: d.id, ...d.data()}));
                 refreshUI();
-            }));
+            }, e => console.error(e)));
+
             unsubscribers.push(onSnapshot(path('goals'), s => {
                 state.goals = s.docs.map(d => ({id: d.id, ...d.data()}));
                 refreshUI();
-            }));
+            }, e => console.error(e)));
+
             unsubscribers.push(onSnapshot(path('receivables'), s => {
                 state.receivables = s.docs.map(d => ({id: d.id, ...d.data()}));
                 refreshUI();
-            }));
+            }, e => console.error(e)));
+
             unsubscribers.push(onSnapshot(path('ledger'), s => {
                 state.ledger = s.docs.map(d => ({id: d.id, ...d.data()}));
                 checkAutoDeferrals();
                 refreshUI();
                 document.getElementById('loading-screen').classList.add('hidden');
-            }));
+            }, e => { console.error(e); document.getElementById('loading-screen').classList.add('hidden'); }));
         }
 
         async function checkAutoDeferrals() {
